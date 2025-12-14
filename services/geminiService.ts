@@ -16,6 +16,12 @@ const parseDataUrl = (dataUrl: string) => {
   return { mimeType: 'image/jpeg', data: dataUrl.replace(/^data:image\/\w+;base64,/, "") };
 };
 
+// Helper to truncate long strings to prevent excessive token usage
+const truncateString = (str: string, maxLength: number) => {
+  if (!str) return "";
+  return str.length > maxLength ? str.substring(0, maxLength) + "..." : str;
+};
+
 // Helper: Clean response but PRESERVE bold markdown (**) for highlighting
 const cleanAIResponse = (text: string): string => {
   if (!text) return "";
@@ -296,7 +302,7 @@ export const enhanceResumeText = async (
       ${specificInstruction}
       
       Original Text:
-      "${text}"
+      "${truncateString(text, 2000)}"
       
       STRICT OUTPUT RULES:
       1. Return ONLY the rewritten text. 
@@ -323,14 +329,16 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
   const ai = new GoogleGenAI({ apiKey });
 
   try {
+    // Construct a safe, truncated version of the resume to send to the AI
+    // We only include fields that are relevant for the rewrite logic to save tokens
     const cleanResume = {
         fullName: currentResume.fullName || "",
         email: currentResume.email || "",
         phone: currentResume.phone || "",
         linkedin: currentResume.linkedin || "",
         location: currentResume.location || "",
-        summary: currentResume.summary || "",
-        skills: currentResume.skills || "",
+        summary: truncateString(currentResume.summary || "", 1500),
+        skills: truncateString(currentResume.skills || "", 1000),
         jobTitle: currentResume.jobTitle || "",
         experience: (currentResume.experience || []).map(e => ({
             id: e.id,
@@ -338,14 +346,14 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
             company: e.company,
             startDate: e.startDate,
             endDate: e.endDate,
-            description: e.description
+            description: truncateString(e.description || "", 1500)
         })),
         projects: (currentResume.projects || []).map(p => ({
             id: p.id,
             name: p.name,
             technologies: p.technologies,
             link: p.link,
-            description: p.description
+            description: truncateString(p.description || "", 1000)
         })),
         education: (currentResume.education || []).map(e => ({
             id: e.id,
@@ -427,19 +435,27 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
       }
     };
 
+    // Use Gemini 3 Pro Preview for large context/complex reasoning tasks to prevent cutoff
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-pro-preview',
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         responseMimeType: 'application/json',
-        responseSchema: schema
+        responseSchema: schema,
+        temperature: 0.3, // Low temperature for deterministic JSON generation
       }
     });
 
     const text = response.text;
-    if (!text) throw new Error("No response");
+    if (!text) throw new Error("No response generated");
 
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    // Safety check for truncated JSON
+    if (!cleanText.endsWith('}')) {
+       throw new Error("Resume too long. AI response was truncated. Try shortening your descriptions slightly.");
+    }
+
     const parsed = JSON.parse(cleanText);
 
     // Clean text and normalize structure (e.g. array descriptions to string)
@@ -464,8 +480,8 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
         phone: currentResume.phone || "",
         linkedin: currentResume.linkedin || "",
         location: currentResume.location || "",
-        summary: currentResume.summary || "",
-        skills: currentResume.skills || "",
+        summary: truncateString(currentResume.summary || "", 1500),
+        skills: truncateString(currentResume.skills || "", 1000),
         jobTitle: currentResume.jobTitle || "",
         experience: (currentResume.experience || []).map(e => ({
             id: e.id,
@@ -473,14 +489,14 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
             company: e.company,
             startDate: e.startDate,
             endDate: e.endDate,
-            description: e.description
+            description: truncateString(e.description || "", 1500)
         })),
         projects: (currentResume.projects || []).map(p => ({
             id: p.id,
             name: p.name,
             technologies: p.technologies,
             link: p.link,
-            description: p.description
+            description: truncateString(p.description || "", 1000)
         })),
         education: (currentResume.education || []).map(e => ({
             id: e.id,
@@ -496,7 +512,7 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
     Tailor this Resume JSON to match the provided Job Description (JD).
     
     Job Description:
-    "${jobDescription.substring(0, 4000)}"
+    "${truncateString(jobDescription, 4000)}"
 
     Instructions:
     1. **Analyze JD**: Identify 5-7 critical keywords from the JD.
@@ -565,12 +581,14 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
       }
     };
 
+    // Use Gemini 3 Pro Preview
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-pro-preview',
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         responseMimeType: 'application/json',
-        responseSchema: schema
+        responseSchema: schema,
+        temperature: 0.3
       }
     });
 
@@ -578,6 +596,12 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
     if (!text) throw new Error("No response");
 
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    // Safety check for truncated JSON
+    if (!cleanText.endsWith('}')) {
+       throw new Error("Tailoring response was truncated. JD or Resume might be too long.");
+    }
+
     const parsed = JSON.parse(cleanText);
 
     // Clean text and normalize structure
@@ -1116,6 +1140,11 @@ export interface ResearchResult {
   };
   compensation: {
     salaryRange: string;
+    breakdown: {
+        fresher: string;
+        mid: string;
+        senior: string;
+    };
     comparison: string;
     benefits: string[];
   };
@@ -1165,6 +1194,11 @@ export const validateResearchResult = (data: any): ResearchResult => {
     },
     compensation: {
       salaryRange: data?.compensation?.salaryRange || "Not available",
+      breakdown: {
+          fresher: data?.compensation?.breakdown?.fresher || "N/A",
+          mid: data?.compensation?.breakdown?.mid || "N/A",
+          senior: data?.compensation?.breakdown?.senior || "N/A"
+      },
       comparison: data?.compensation?.comparison || "",
       benefits: data?.compensation?.benefits || []
     },
@@ -1212,8 +1246,9 @@ export const runAgentResearch = async (company: string, role: string): Promise<R
     1. Use Google Search to find real-time data.
     2. Specifically look for **Glassdoor reviews for ${company} in India** (or global if India not available).
     3. Look for **Reddit threads** on r/developersIndia, r/csMajors, or r/jobs about ${company} work culture.
-    4. Find **salary data** on Levels.fyi, AmbitionBox, or Glassdoor for India (INR).
-    5. Look for **Interview Questions, Candidate Experiences, and Employee Reviews** specifically. Prioritize this over general news.
+    4. Find **salary data** on Levels.fyi, AmbitionBox, or Glassdoor for India (INR). 
+    5. SPECIFICALLY look for data for Freshers (0-1 yoe), Mid-level (2-3 yoe), and Senior roles.
+    6. Look for **Interview Questions, Candidate Experiences, and Employee Reviews**.
 
     Conduct systematic research and provide findings adhering to the JSON structure below.
     
@@ -1225,7 +1260,16 @@ export const runAgentResearch = async (company: string, role: string): Promise<R
       "companyIntelligence": { "overview": "string", "sizeAndStage": "string", "competitors": ["string"], "financialHealth": "string" },
       "marketAnalysis": { "recentNews": ["string"], "marketPosition": "string" },
       "culture": { "workEnvironment": "string", "engineeringCulture": "string" },
-      "compensation": { "salaryRange": "string", "comparison": "string", "benefits": ["string"] },
+      "compensation": { 
+          "salaryRange": "string (Overall estimated range)", 
+          "breakdown": {
+              "fresher": "string (e.g. ₹12L - ₹18L)",
+              "mid": "string (e.g. ₹20L - ₹35L)",
+              "senior": "string (e.g. ₹40L+)"
+          },
+          "comparison": "string", 
+          "benefits": ["string"] 
+      },
       "hiring": { "process": ["string"], "applicationStrategy": "string" },
       "risks": { "level": "Low" | "Medium" | "High", "concerns": ["string"] },
       "strategy": { "outreach": "string", "differentiators": ["string"] },
