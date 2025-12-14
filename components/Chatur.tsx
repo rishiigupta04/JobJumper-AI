@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useJobContext } from '../context/JobContext';
 import { chatWithChatur } from '../services/geminiService';
 import { ChatMessage } from '../types';
-import { Send, Sparkles, Loader2, Bot, User, Trash2 } from 'lucide-react';
+import { Send, Sparkles, Loader2, Bot, User, Trash2, RefreshCw } from 'lucide-react';
 
 const generateId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -15,6 +15,7 @@ const Chatur: React.FC = () => {
   const { stats, jobs, resume, chatMessages, addChatMessage, clearChat, isChatInitialized, setChatInitialized } = useJobContext();
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isResetting, setIsResetting] = useState(false); // Visual state for clearing
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom
@@ -23,13 +24,15 @@ const Chatur: React.FC = () => {
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [chatMessages, isTyping]);
+    if (!isResetting) {
+        scrollToBottom();
+    }
+  }, [chatMessages, isTyping, isResetting]);
 
   // Initial Proactive Message
   useEffect(() => {
-    if (!isChatInitialized && chatMessages.length === 0) {
-      // Add a small delay to make the "reset" feel more natural if clearing
+    // Only trigger if NOT currently resetting manually (to avoid race conditions)
+    if (!isChatInitialized && chatMessages.length === 0 && !isResetting) {
       const timer = setTimeout(() => {
           setChatInitialized(true);
           const conversionRate = stats.applied > 0 ? (stats.interview / stats.applied) : 0;
@@ -48,11 +51,11 @@ const Chatur: React.FC = () => {
           }
 
           addChatMessage({ id: 'init', role: 'model', text: initialText, timestamp: Date.now() });
-      }, 500);
+      }, 600); // Slightly longer delay for natural feel
       
       return () => clearTimeout(timer);
     }
-  }, [isChatInitialized, chatMessages.length, stats, jobs, setChatInitialized, addChatMessage]);
+  }, [isChatInitialized, chatMessages.length, stats, jobs, setChatInitialized, addChatMessage, isResetting]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -70,8 +73,6 @@ const Chatur: React.FC = () => {
 
     // Prepare rich context
     const activeOffers = jobs.filter(j => j.status === 'Offer' || j.status === 'Accepted');
-    
-    // Sort jobs to determine priority for context window inclusion
     const sortedJobs = [...jobs].sort((a, b) => new Date(b.dateApplied).getTime() - new Date(a.dateApplied).getTime());
 
     const contextData = {
@@ -80,13 +81,11 @@ const Chatur: React.FC = () => {
         title: resume.jobTitle,
         skills: resume.skills,
         summary: resume.summary,
-        // Pass FULL objects so the AI sees descriptions, not just titles/dates
         experience: resume.experience,
         projects: resume.projects,
         education: resume.education
       },
       stats,
-      // Separate active offers for high-priority attention
       offers: activeOffers.map(j => ({
         company: j.company,
         role: j.role,
@@ -94,14 +93,7 @@ const Chatur: React.FC = () => {
         negotiationStrategy: j.negotiationStrategy,
         notes: j.notes
       })),
-      // Pass comprehensive details to allow differentiation
-      jobs: sortedJobs.map(j => {
-        // Optimization: Pass full details for Active jobs or recent applications (last 5).
-        // For older/rejected jobs, we can truncate descriptions to save context if needed, 
-        // but Gemini 2.0 Flash has a huge window, so let's pass as much as possible for accuracy.
-        const isPriority = ['Interview', 'Offer', 'Accepted'].includes(j.status);
-        
-        return {
+      jobs: sortedJobs.map(j => ({
             company: j.company,
             role: j.role,
             status: j.status,
@@ -109,17 +101,14 @@ const Chatur: React.FC = () => {
             salary: j.salary,
             dateApplied: j.dateApplied,
             interviewDate: j.interviewDate,
-            // Pass FULL description for better context awareness
             description: j.description || 'No description provided',
             notes: j.notes,
             negotiationStrategy: j.negotiationStrategy,
             interviewGuide: j.interviewGuide,
-            // Pass FULL cover letter so the user can ask "Critique this cover letter"
             coverLetter: j.coverLetter || 'Not generated yet',
             contacts: j.contacts?.map(c => ({ name: c.name, role: c.role })),
-            checklist: j.checklist?.filter(c => !c.completed).map(c => c.text), // Pending items
-        };
-      }),
+            checklist: j.checklist?.filter(c => !c.completed).map(c => c.text),
+      })),
       currentDate: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
     };
 
@@ -144,11 +133,18 @@ const Chatur: React.FC = () => {
   };
 
   const handleClear = () => {
-    if (window.confirm("Start a new conversation? History will be cleared.")) {
-      clearChat();
-      // Reset local state to ensure UI feels responsive
+    if (window.confirm("Start a new conversation? Current history will be cleared.")) {
+      setIsResetting(true); // Start visual reset
       setIsTyping(false);
       setInput('');
+      
+      // Perform clear
+      clearChat();
+      
+      // Keep visual "Resetting" state for a moment to indicate action
+      setTimeout(() => {
+        setIsResetting(false);
+      }, 1500);
     }
   };
 
@@ -164,10 +160,10 @@ const Chatur: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-170px)] flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div className="h-[calc(100vh-170px)] flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden relative">
         
         {/* Chat Header */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 flex justify-between items-center">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 flex justify-between items-center z-10">
             <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl text-white shadow-lg shadow-indigo-200 dark:shadow-none">
                     <Bot size={24} />
@@ -181,58 +177,67 @@ const Chatur: React.FC = () => {
             </div>
             <button 
                 onClick={handleClear}
-                className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors" 
+                disabled={isResetting}
+                className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors disabled:opacity-50" 
                 title="Reset Chat"
             >
-                <Trash2 size={18} />
+                {isResetting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
             </button>
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar bg-slate-50/30 dark:bg-slate-950/30">
-            {chatMessages.map((msg) => (
-                <div 
-                    key={msg.id} 
-                    className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-                >
-                    {/* Avatar */}
-                    <div className={`
-                        w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1
-                        ${msg.role === 'user' 
-                            ? 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300' 
-                            : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                        }
-                    `}>
-                        {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
-                    </div>
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar bg-slate-50/30 dark:bg-slate-950/30 relative">
+            
+            {isResetting ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-sm z-20">
+                    <RefreshCw size={32} className="text-indigo-500 animate-spin mb-3" />
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Starting new session...</p>
+                </div>
+            ) : (
+                <>
+                    {chatMessages.map((msg) => (
+                        <div 
+                            key={msg.id} 
+                            className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+                        >
+                            <div className={`
+                                w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1
+                                ${msg.role === 'user' 
+                                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300' 
+                                    : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                                }
+                            `}>
+                                {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+                            </div>
 
-                    {/* Bubble */}
-                    <div className={`
-                        max-w-[85%] md:max-w-[75%] p-4 rounded-2xl text-sm leading-relaxed shadow-sm
-                        ${msg.role === 'user' 
-                            ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tr-none' 
-                            : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
-                        }
-                    `}>
-                        <div className="whitespace-pre-wrap">
-                            {renderFormattedText(msg.text)}
+                            <div className={`
+                                max-w-[85%] md:max-w-[75%] p-4 rounded-2xl text-sm leading-relaxed shadow-sm
+                                ${msg.role === 'user' 
+                                    ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tr-none' 
+                                    : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
+                                }
+                            `}>
+                                <div className="whitespace-pre-wrap">
+                                    {renderFormattedText(msg.text)}
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            ))}
+                    ))}
 
-            {isTyping && (
-                <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0 mt-1">
-                        <Bot size={16} />
-                    </div>
-                    <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl rounded-tl-none border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-2">
-                         <Loader2 size={16} className="animate-spin text-indigo-500" />
-                         <span className="text-xs text-slate-400">Thinking...</span>
-                    </div>
-                </div>
+                    {isTyping && (
+                        <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0 mt-1">
+                                <Bot size={16} />
+                            </div>
+                            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl rounded-tl-none border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-2">
+                                <Loader2 size={16} className="animate-spin text-indigo-500" />
+                                <span className="text-xs text-slate-400">Thinking...</span>
+                            </div>
+                        </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                </>
             )}
-            <div ref={messagesEndRef} />
         </div>
 
         {/* Input Area */}
@@ -246,12 +251,13 @@ const Chatur: React.FC = () => {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
+                    disabled={isResetting}
                     placeholder="Ask Chatur about your applications, interviews, or resume..."
-                    className="flex-1 w-full pl-12 pr-12 py-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                    className="flex-1 w-full pl-12 pr-12 py-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm disabled:opacity-50"
                 />
                 <button 
                     onClick={handleSend}
-                    disabled={!input.trim() || isTyping}
+                    disabled={!input.trim() || isTyping || isResetting}
                     className="absolute right-2 p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-indigo-200 dark:shadow-none"
                 >
                     <Send size={18} />

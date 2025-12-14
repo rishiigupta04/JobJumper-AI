@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useJobContext } from '../context/JobContext';
-import { enhanceResumeText, parseResumeFromImage, enhanceFullResume, tailorResume } from '../services/geminiService';
+import { enhanceResumeText, parseResumeFromDocument, enhanceFullResume, tailorResume, scoreResume, ResumeScore } from '../services/geminiService';
 import { 
   FileText, Sparkles, Plus, Trash2, MapPin, Mail, Phone, Linkedin, 
-  GraduationCap, Briefcase, Loader2, FolderGit2, UploadCloud, Wand2, Download, Target, X
+  GraduationCap, Briefcase, Loader2, FolderGit2, UploadCloud, Wand2, Download, Target, X,
+  Percent, AlertTriangle, CheckCircle2, Lightbulb
 } from 'lucide-react';
 import { Experience, Education, Project, Resume } from '../types';
 
@@ -26,6 +27,12 @@ const ResumeBuilder: React.FC = () => {
   const [showTailorModal, setShowTailorModal] = useState(false);
   const [tailorJd, setTailorJd] = useState('');
   
+  // Score Resume State
+  const [isScoring, setIsScoring] = useState(false);
+  const [showScoreModal, setShowScoreModal] = useState(false);
+  const [scoreJd, setScoreJd] = useState('');
+  const [scoreResult, setScoreResult] = useState<ResumeScore | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Helper for input styles
@@ -143,6 +150,21 @@ const ResumeBuilder: React.FC = () => {
     }
   };
 
+  const handleScoreResume = async () => {
+    if (!scoreJd.trim()) return;
+    setIsScoring(true);
+    setScoreResult(null);
+    try {
+      const result = await scoreResume(resume, scoreJd);
+      setScoreResult(result);
+    } catch (e: any) {
+      console.error(e);
+      alert("Failed to score resume. Please try again.");
+    } finally {
+      setIsScoring(false);
+    }
+  };
+
   const applyResumeUpdates = (enhanced: Resume) => {
       const newResume: Resume = {
           ...resume, // Keep original as base (preserves avatar, etc.)
@@ -176,7 +198,7 @@ const ResumeBuilder: React.FC = () => {
       reader.onloadend = async () => {
         const base64 = reader.result as string;
         try {
-          const parsedData = await parseResumeFromImage(base64);
+          const parsedData = await parseResumeFromDocument(base64);
           
           // Merge logic: Ensure IDs are present for arrays
           const newResume: Resume = {
@@ -190,7 +212,7 @@ const ResumeBuilder: React.FC = () => {
           updateResume(newResume);
         } catch (err) {
           console.error("Parse error", err);
-          alert("Failed to parse resume. Please ensure the image is clear.");
+          alert("Failed to parse resume. Please ensure the file is clear.");
         }
         setIsImporting(false);
       };
@@ -250,7 +272,8 @@ const ResumeBuilder: React.FC = () => {
       id: generateId(),
       degree: '',
       school: '',
-      year: ''
+      year: '',
+      grade: ''
     };
     updateResume({ ...resume, education: [newEdu, ...resume.education] });
   };
@@ -301,44 +324,54 @@ const ResumeBuilder: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                {/* Intelligent Import */}
                <div className="relative">
                   <button 
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isImporting || isFullEnhancing || isTailoring}
-                    className="w-full h-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 text-slate-700 dark:text-slate-300 px-3 py-3 rounded-xl text-xs font-medium flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-sm"
+                    disabled={isImporting || isFullEnhancing || isTailoring || isScoring}
+                    className="w-full h-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 text-slate-700 dark:text-slate-300 px-2 py-3 rounded-xl text-xs font-medium flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-sm"
                   >
                     {isImporting ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={20} className="text-indigo-500" />}
-                    {isImporting ? 'Analyzing...' : 'Import Image'}
+                    {isImporting ? 'Analyzing' : 'Import'}
                   </button>
                   <input 
                     type="file" 
                     ref={fileInputRef} 
                     className="hidden" 
-                    accept="image/*" 
+                    accept="image/*,application/pdf" 
                     onChange={handleImport}
                   />
                </div>
 
+               {/* Score Resume */}
+               <button 
+                  onClick={() => setShowScoreModal(true)}
+                  disabled={isImporting || isFullEnhancing || isTailoring || isScoring}
+                  className="w-full h-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-500 text-slate-700 dark:text-slate-300 px-2 py-3 rounded-xl text-xs font-medium flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-sm"
+               >
+                  {isScoring ? <Loader2 size={16} className="animate-spin" /> : <Percent size={20} className="text-emerald-500" />}
+                  {isScoring ? 'Scoring' : 'Score'}
+               </button>
+
                {/* Tailor Resume */}
                <button 
                   onClick={() => setShowTailorModal(true)}
-                  disabled={isImporting || isFullEnhancing || isTailoring}
-                  className="w-full h-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-purple-500 dark:hover:border-purple-500 text-slate-700 dark:text-slate-300 px-3 py-3 rounded-xl text-xs font-medium flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-sm"
+                  disabled={isImporting || isFullEnhancing || isTailoring || isScoring}
+                  className="w-full h-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-purple-500 dark:hover:border-purple-500 text-slate-700 dark:text-slate-300 px-2 py-3 rounded-xl text-xs font-medium flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-sm"
                >
                   {isTailoring ? <Loader2 size={16} className="animate-spin" /> : <Target size={20} className="text-purple-500" />}
-                  {isTailoring ? 'Tailoring...' : 'Tailor to JD'}
+                  {isTailoring ? 'Tailoring' : 'Tailor'}
                </button>
 
                {/* Full Enhancement */}
                <button 
                   onClick={handleFullEnhancement}
-                  disabled={isImporting || isFullEnhancing || isTailoring}
-                  className="w-full h-full bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-3 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-lg shadow-indigo-200 dark:shadow-none"
+                  disabled={isImporting || isFullEnhancing || isTailoring || isScoring}
+                  className="w-full h-full bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-3 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-lg shadow-indigo-200 dark:shadow-none"
                >
                   {isFullEnhancing ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={20} />}
-                  {isFullEnhancing ? 'Polishing...' : 'Magic Polish'}
+                  {isFullEnhancing ? 'Polishing' : 'Polish'}
                </button>
             </div>
           </div>
@@ -540,7 +573,7 @@ const ResumeBuilder: React.FC = () => {
               {resume.education.map((edu, index) => (
                 <div key={edu.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/50">
                   <div className="flex justify-between items-start mb-3">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mr-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full mr-4">
                         <div>
                           <label className={labelClass}>Degree</label>
                           <input className={inputClass} value={edu.degree} onChange={e => updateEducation(edu.id, 'degree', e.target.value)} placeholder="B.Tech Computer Science" />
@@ -552,6 +585,10 @@ const ResumeBuilder: React.FC = () => {
                         <div>
                           <label className={labelClass}>Year</label>
                           <input className={inputClass} value={edu.year} onChange={e => updateEducation(edu.id, 'year', e.target.value)} placeholder="2020" />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Grade / % (Optional)</label>
+                          <input className={inputClass} value={edu.grade || ''} onChange={e => updateEducation(edu.id, 'grade', e.target.value)} placeholder="e.g. 9.0 CGPA or 85%" />
                         </div>
                     </div>
                     <button onClick={() => removeEducation(edu.id)} className="text-slate-400 hover:text-rose-500 transition-colors mt-6">
@@ -658,14 +695,17 @@ const ResumeBuilder: React.FC = () => {
               {resume.education.length > 0 && (
                 <div className="mb-6">
                   <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-3 pb-1">Education</h2>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {resume.education.map(edu => (
-                      <div key={edu.id} className="flex justify-between items-baseline">
+                      <div key={edu.id} className="flex justify-between items-start">
                         <div>
                           <div className="text-sm font-bold text-slate-900">{edu.school}</div>
                           <div className="text-xs text-slate-600">{edu.degree}</div>
                         </div>
-                        <span className="text-xs font-semibold text-slate-500">{edu.year}</span>
+                        <div className="text-right flex-shrink-0 ml-4">
+                            <div className="text-xs font-semibold text-slate-500">{edu.year}</div>
+                            {edu.grade && <div className="text-xs font-medium text-slate-500 mt-0.5">{edu.grade}</div>}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -723,6 +763,147 @@ const ResumeBuilder: React.FC = () => {
                     {isTailoring ? 'Optimizing...' : 'Tailor Resume'}
                  </button>
               </div>
+           </div>
+        </div>
+      )}
+
+      {/* Score Resume Modal */}
+      {showScoreModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+           <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full ${scoreResult ? 'max-w-4xl' : 'max-w-lg'} p-6 animate-fade-in border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto`}>
+              <div className="flex justify-between items-center mb-6">
+                 <div>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Percent size={20} className="text-emerald-600" /> Resume Score Card
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Analyze your fit against a specific job.</p>
+                 </div>
+                 <button onClick={() => setShowScoreModal(false)} className="text-slate-400 hover:text-slate-600">
+                    <X size={24} />
+                 </button>
+              </div>
+
+              {!scoreResult ? (
+                <>
+                  <div className="mb-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800/50">
+                      <p className="text-sm text-emerald-800 dark:text-emerald-200 font-medium">
+                          Paste the Job Description below. The AI will act as a strict Hiring Manager and score your resume, highlighting Strengths, Gaps, and actionable fixes.
+                      </p>
+                  </div>
+
+                  <div className="mb-6">
+                    <label className={labelClass}>Job Description (JD)</label>
+                    <textarea 
+                        className="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none resize-y min-h-[200px] text-sm"
+                        placeholder="Paste the full job description here..."
+                        value={scoreJd}
+                        onChange={(e) => setScoreJd(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <button 
+                        onClick={() => setShowScoreModal(false)}
+                        className="px-4 py-2 text-slate-500 hover:text-slate-700 font-medium"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={handleScoreResume}
+                        disabled={!scoreJd.trim() || isScoring}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-bold shadow-lg shadow-emerald-200 dark:shadow-none transition-all flex items-center gap-2 disabled:opacity-70"
+                    >
+                        {isScoring ? <Loader2 className="animate-spin" size={18} /> : <Target size={18} />}
+                        {isScoring ? 'Analyzing...' : 'Analyze Match'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-6">
+                  {/* Score Header */}
+                  <div className="flex items-center gap-6 p-6 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800">
+                     <div className="relative h-24 w-24 flex items-center justify-center">
+                        <svg className="h-full w-full" viewBox="0 0 36 36">
+                          <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e2e8f0" strokeWidth="3" />
+                          <path 
+                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
+                            fill="none" 
+                            stroke={scoreResult.score > 75 ? '#10b981' : scoreResult.score > 50 ? '#f59e0b' : '#ef4444'} 
+                            strokeWidth="3" 
+                            strokeDasharray={`${scoreResult.score}, 100`}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center flex-col">
+                          <span className="text-2xl font-bold text-slate-900 dark:text-white">{scoreResult.score}%</span>
+                          <span className="text-[10px] uppercase font-bold text-slate-500">Match</span>
+                        </div>
+                     </div>
+                     <div className="flex-1">
+                        <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Verdict</h4>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                          {scoreResult.summary}
+                        </p>
+                     </div>
+                  </div>
+
+                  {/* 3 Columns */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Strengths */}
+                    <div className="p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                       <h4 className="flex items-center gap-2 font-bold text-emerald-800 dark:text-emerald-400 mb-3">
+                          <CheckCircle2 size={18} /> Top Strengths
+                       </h4>
+                       <ul className="space-y-2">
+                          {scoreResult.strengths.map((item, i) => (
+                             <li key={i} className="text-sm text-emerald-900 dark:text-emerald-200 flex items-start gap-2">
+                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                {item}
+                             </li>
+                          ))}
+                       </ul>
+                    </div>
+
+                    {/* Gaps */}
+                    <div className="p-4 bg-rose-50 dark:bg-rose-900/10 rounded-xl border border-rose-100 dark:border-rose-900/30">
+                       <h4 className="flex items-center gap-2 font-bold text-rose-800 dark:text-rose-400 mb-3">
+                          <AlertTriangle size={18} /> Missing / Weak
+                       </h4>
+                       <ul className="space-y-2">
+                          {scoreResult.gaps.map((item, i) => (
+                             <li key={i} className="text-sm text-rose-900 dark:text-rose-200 flex items-start gap-2">
+                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0"></span>
+                                {item}
+                             </li>
+                          ))}
+                       </ul>
+                    </div>
+
+                    {/* Recommendations */}
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                       <h4 className="flex items-center gap-2 font-bold text-blue-800 dark:text-blue-400 mb-3">
+                          <Lightbulb size={18} /> Recommendations
+                       </h4>
+                       <ul className="space-y-2">
+                          {scoreResult.recommendations.map((item, i) => (
+                             <li key={i} className="text-sm text-blue-900 dark:text-blue-200 flex items-start gap-2">
+                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                                {item}
+                             </li>
+                          ))}
+                       </ul>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
+                     <button 
+                        onClick={() => { setScoreResult(null); setScoreJd(''); }}
+                        className="text-sm text-slate-500 hover:text-indigo-600 font-medium px-4"
+                     >
+                        Analyze Another Job
+                     </button>
+                  </div>
+                </div>
+              )}
            </div>
         </div>
       )}

@@ -89,6 +89,7 @@ export interface Education {
   degree: string;
   school: string;
   year: string;
+  grade?: string; // GPA, Percentage, etc.
 }
 
 export interface Resume {

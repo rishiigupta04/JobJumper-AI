@@ -77,6 +77,65 @@ const normalizeResumeJSON = (data: any): any => {
   return data;
 };
 
+export interface ResumeScore {
+  score: number;
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  recommendations: string[];
+}
+
+export const scoreResume = async (resume: Resume, jobDescription: string): Promise<ResumeScore> => {
+  if (!apiKey) throw new Error("API Key is missing.");
+
+  try {
+    const prompt = `
+    Act as a strict Technical Recruiter and Hiring Manager. 
+    Rigorously score the provided Resume against the Job Description (JD).
+
+    Job Description:
+    "${jobDescription.substring(0, 3000)}"
+
+    Resume:
+    ${JSON.stringify(resume)}
+
+    Analysis Requirements:
+    1. **Score**: 0-100 based on keyword matching, experience level, and skills alignment. Be realistic (e.g., if key skills are missing, score lower).
+    2. **Summary**: One punchy sentence summarizing the match.
+    3. **Strengths**: Top 3 matching skills/experiences.
+    4. **Gaps**: Top 3 missing requirements or weak points.
+    5. **Recommendations**: 2-3 specific, actionable tweaks to improve the score.
+
+    Return JSON ONLY matching this schema:
+    {
+      "score": number,
+      "summary": "string",
+      "strengths": ["string", "string", "string"],
+      "gaps": ["string", "string", "string"],
+      "recommendations": ["string", "string"]
+    }
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: 'application/json'
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No response");
+
+    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanText) as ResumeScore;
+
+  } catch (error) {
+    console.error("Gemini Score Resume Error:", error);
+    throw error;
+  }
+};
+
 export const generateCoverLetter = async (
   jobRole: string,
   company: string,
@@ -281,7 +340,8 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
             id: e.id,
             degree: e.degree,
             school: e.school,
-            year: e.year
+            year: e.year,
+            grade: e.grade
         }))
     };
 
@@ -358,7 +418,8 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
             id: e.id,
             degree: e.degree,
             school: e.school,
-            year: e.year
+            year: e.year,
+            grade: e.grade
         }))
     };
 
@@ -448,13 +509,13 @@ export const generateAvatar = async (
   }
 };
 
-export const parseResumeFromImage = async (imageBase64: string): Promise<Partial<Resume>> => {
+export const parseResumeFromDocument = async (fileBase64: string): Promise<Partial<Resume>> => {
   if (!apiKey) throw new Error("API Key is missing.");
 
   try {
-    const { mimeType, data } = parseDataUrl(imageBase64);
+    const { mimeType, data } = parseDataUrl(fileBase64);
     
-    const prompt = `Analyze this resume image. Extract structured data into JSON matching the schema below.
+    const prompt = `Analyze this resume document. Extract structured data into JSON matching the schema below.
     
     FORMATTING RULES:
     1. **Skills**: Must be a single string with skills separated by vertical bars (|). Example: "React | Node.js | TypeScript".
@@ -473,7 +534,7 @@ export const parseResumeFromImage = async (imageBase64: string): Promise<Partial
       "skills": "string",
       "experience": [ { "role": "string", "company": "string", "startDate": "string", "endDate": "string", "description": "string" } ],
       "projects": [ { "name": "string", "technologies": "string", "link": "string", "description": "string" } ],
-      "education": [ { "degree": "string", "school": "string", "year": "string" } ]
+      "education": [ { "degree": "string", "school": "string", "year": "string", "grade": "string" } ]
     }
     
     Return ONLY the raw JSON string.`;

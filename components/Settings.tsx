@@ -1,12 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useJobContext } from '../context/JobContext';
 import { useAuth } from '../context/AuthContext';
 import { 
   User, Mail, Phone, MapPin, Linkedin, Globe, Save, 
   Loader2, Moon, Sun, Download, Trash2, Shield, Layout,
-  Briefcase, Award, Terminal, Database, Code2
+  Briefcase, Award, Terminal, Database, Code2, UploadCloud, FileText
 } from 'lucide-react';
 import { Resume } from '../types';
+import { parseResumeFromDocument } from '../services/geminiService';
+
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+};
 
 const Settings: React.FC = () => {
   const { resume, updateResume, theme, toggleTheme, jobs, stats, loadDemoData } = useJobContext();
@@ -16,6 +24,8 @@ const Settings: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Local state for form to prevent context thrashing
   const [formData, setFormData] = useState<Partial<Resume>>({});
@@ -43,6 +53,43 @@ const Settings: React.FC = () => {
         await loadDemoData();
         setIsDemoLoading(false);
         alert("Demo data loaded successfully!");
+    }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        try {
+          const parsedData = await parseResumeFromDocument(base64);
+          
+          // Merge logic: Ensure IDs are present for arrays
+          const newResume: Resume = {
+            ...resume,
+            ...parsedData,
+            experience: parsedData.experience?.map(e => ({ ...e, id: generateId() })) || [],
+            projects: parsedData.projects?.map(p => ({ ...p, id: generateId() })) || [],
+            education: parsedData.education?.map(ed => ({ ...ed, id: generateId() })) || [],
+          };
+          
+          await updateResume(newResume);
+          setFormData(newResume); // Update local form state immediately
+          setSuccessMsg("Resume parsed and saved! AI now has access to this data.");
+          setTimeout(() => setSuccessMsg(null), 5000);
+        } catch (err) {
+          console.error("Parse error", err);
+          alert("Failed to parse resume. Please ensure the file is clear.");
+        }
+        setIsImporting(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      setIsImporting(false);
     }
   };
 
@@ -117,6 +164,36 @@ const Settings: React.FC = () => {
                     <h3 className="text-xl font-bold text-slate-900 dark:text-white">{formData.fullName || 'Your Name'}</h3>
                     <p className="text-sm text-slate-500">{user?.email}</p>
                  </div>
+               </div>
+               
+               {/* Resume Upload Section */}
+               <div className="bg-indigo-50 dark:bg-indigo-900/10 p-5 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
+                  <div className="flex items-start gap-4">
+                     <div className="p-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-indigo-600 dark:text-indigo-400">
+                        <FileText size={24} />
+                     </div>
+                     <div className="flex-1">
+                        <h4 className="font-bold text-slate-800 dark:text-white mb-1">Auto-fill Profile from Resume</h4>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                           Upload your resume (PDF or Image) to automatically populate your profile fields. This ensures the AI has the most accurate context about your skills and experience.
+                        </p>
+                        <button 
+                           onClick={() => fileInputRef.current?.click()}
+                           disabled={isImporting}
+                           className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm disabled:opacity-70"
+                        >
+                           {isImporting ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+                           {isImporting ? 'Processing Resume...' : 'Upload Resume & Auto-fill'}
+                        </button>
+                        <input 
+                           type="file" 
+                           ref={fileInputRef} 
+                           className="hidden" 
+                           accept="image/*,application/pdf" 
+                           onChange={handleImport}
+                        />
+                     </div>
+                  </div>
                </div>
 
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
