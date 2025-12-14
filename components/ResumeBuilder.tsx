@@ -8,6 +8,9 @@ import {
 } from 'lucide-react';
 import { Experience, Education, Project, Resume } from '../types';
 
+// Declare html2pdf for TypeScript since we loaded it via CDN
+declare var html2pdf: any;
+
 const generateId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -21,6 +24,7 @@ const ResumeBuilder: React.FC = () => {
   const [isEnhancing, setIsEnhancing] = useState<string | null>(null);
   const [isFullEnhancing, setIsFullEnhancing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   
   // Tailor Resume State
   const [isTailoring, setIsTailoring] = useState(false);
@@ -162,6 +166,42 @@ const ResumeBuilder: React.FC = () => {
       alert("Failed to score resume. Please try again.");
     } finally {
       setIsScoring(false);
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    const element = document.getElementById('resume-preview');
+    if (!element) return;
+
+    setIsDownloading(true);
+
+    const safeName = (resume.fullName || 'Resume').replace(/[^a-z0-9]/gi, '_');
+    const filename = `${safeName}_Resume.pdf`;
+
+    const opt = {
+      margin: 0, // No margins, handled by CSS padding in element
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { 
+        scale: 2, // 2x scale for Retina-like crispness
+        useCORS: true,
+        letterRendering: true 
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    // Use html2pdf.js via CDN window object
+    if (typeof html2pdf !== 'undefined') {
+        html2pdf().set(opt).from(element).save().then(() => {
+            setIsDownloading(false);
+        }).catch((err: any) => {
+            console.error("PDF generation failed:", err);
+            alert("Failed to generate PDF. Please try again.");
+            setIsDownloading(false);
+        });
+    } else {
+        alert("PDF generator not loaded. Please refresh the page.");
+        setIsDownloading(false);
     }
   };
 
@@ -608,11 +648,12 @@ const ResumeBuilder: React.FC = () => {
         {/* Actions Bar */}
         <div className="mb-4 flex justify-end print:hidden">
           <button 
-            onClick={() => window.print()}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-md transition-colors"
+            onClick={handleDownloadPDF}
+            disabled={isDownloading}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-md transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <Download size={18} />
-            Save as PDF
+            {isDownloading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+            {isDownloading ? 'Generating PDF...' : 'Download PDF'}
           </button>
         </div>
 
