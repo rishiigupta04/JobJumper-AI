@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Resume, ChatMessage } from "../types";
 
 // Safely access process.env to prevent crashes in browser environments
@@ -8,9 +8,6 @@ const getApiKey = () => {
   }
   return '';
 };
-
-const apiKey = getApiKey();
-const ai = new GoogleGenAI({ apiKey });
 
 // Helper to extract clean base64 and mimeType
 const parseDataUrl = (dataUrl: string) => {
@@ -86,7 +83,9 @@ export interface ResumeScore {
 }
 
 export const scoreResume = async (resume: Resume, jobDescription: string): Promise<ResumeScore> => {
+  const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const prompt = `
@@ -105,22 +104,26 @@ export const scoreResume = async (resume: Resume, jobDescription: string): Promi
     3. **Strengths**: Top 3 matching skills/experiences.
     4. **Gaps**: Top 3 missing requirements or weak points.
     5. **Recommendations**: 2-3 specific, actionable tweaks to improve the score.
-
-    Return JSON ONLY matching this schema:
-    {
-      "score": number,
-      "summary": "string",
-      "strengths": ["string", "string", "string"],
-      "gaps": ["string", "string", "string"],
-      "recommendations": ["string", "string"]
-    }
     `;
+
+    const schema: Schema = {
+      type: Type.OBJECT,
+      properties: {
+        score: { type: Type.NUMBER },
+        summary: { type: Type.STRING },
+        strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+        gaps: { type: Type.ARRAY, items: { type: Type.STRING } },
+        recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
+      },
+      required: ["score", "summary", "strengths", "gaps", "recommendations"],
+    };
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [{ parts: [{ text: prompt }] }],
       config: {
-        responseMimeType: 'application/json'
+        responseMimeType: 'application/json',
+        responseSchema: schema
       }
     });
 
@@ -142,7 +145,9 @@ export const generateCoverLetter = async (
   userSkills: string,
   jobDescription?: string
 ): Promise<string> => {
+  const apiKey = getApiKey();
   if (!apiKey) return "Error: API Key is missing. Please check your configuration.";
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const prompt = `Write a passionate and professional cover letter for the role of ${jobRole} at ${company}. 
@@ -168,7 +173,9 @@ export const generateInterviewGuide = async (
   company: string,
   description: string
 ): Promise<string> => {
+  const apiKey = getApiKey();
   if (!apiKey) return "Error: API Key is missing.";
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const prompt = `
@@ -225,7 +232,9 @@ export const generateNegotiationStrategy = async (
   salary: string,
   description: string
 ): Promise<string> => {
+  const apiKey = getApiKey();
   if (!apiKey) return "Error: API Key is missing.";
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const prompt = `
@@ -269,7 +278,9 @@ export const enhanceResumeText = async (
   text: string,
   type: 'summary' | 'experience' | 'project'
 ): Promise<string> => {
+  const apiKey = getApiKey();
   if (!apiKey) return "Error: API Key is missing.";
+  const ai = new GoogleGenAI({ apiKey });
   
   if (!text) return "";
 
@@ -309,7 +320,9 @@ export const enhanceResumeText = async (
 };
 
 export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> => {
+  const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const cleanResume = {
@@ -362,11 +375,66 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
     ${JSON.stringify(cleanResume)}
     `;
 
+    const schema: Schema = {
+      type: Type.OBJECT,
+      properties: {
+        fullName: { type: Type.STRING },
+        email: { type: Type.STRING },
+        phone: { type: Type.STRING },
+        linkedin: { type: Type.STRING },
+        location: { type: Type.STRING },
+        summary: { type: Type.STRING },
+        skills: { type: Type.STRING },
+        jobTitle: { type: Type.STRING },
+        experience: { 
+          type: Type.ARRAY, 
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              role: { type: Type.STRING },
+              company: { type: Type.STRING },
+              startDate: { type: Type.STRING },
+              endDate: { type: Type.STRING },
+              description: { type: Type.STRING }
+            }
+          }
+        },
+        projects: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              name: { type: Type.STRING },
+              technologies: { type: Type.STRING },
+              link: { type: Type.STRING },
+              description: { type: Type.STRING }
+            }
+          }
+        },
+        education: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              degree: { type: Type.STRING },
+              school: { type: Type.STRING },
+              year: { type: Type.STRING },
+              grade: { type: Type.STRING }
+            }
+          }
+        }
+      }
+    };
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [{ parts: [{ text: prompt }] }],
       config: {
-        responseMimeType: 'application/json'
+        responseMimeType: 'application/json',
+        responseSchema: schema
       }
     });
 
@@ -387,7 +455,9 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
 };
 
 export const tailorResume = async (currentResume: Resume, jobDescription: string): Promise<Resume> => {
+  const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const cleanResume = {
@@ -442,11 +512,67 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
     ${JSON.stringify(cleanResume)}
     `;
 
+    // Reuse similar schema as enhanceFullResume
+    const schema: Schema = {
+      type: Type.OBJECT,
+      properties: {
+        fullName: { type: Type.STRING },
+        email: { type: Type.STRING },
+        phone: { type: Type.STRING },
+        linkedin: { type: Type.STRING },
+        location: { type: Type.STRING },
+        summary: { type: Type.STRING },
+        skills: { type: Type.STRING },
+        jobTitle: { type: Type.STRING },
+        experience: { 
+          type: Type.ARRAY, 
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              role: { type: Type.STRING },
+              company: { type: Type.STRING },
+              startDate: { type: Type.STRING },
+              endDate: { type: Type.STRING },
+              description: { type: Type.STRING }
+            }
+          }
+        },
+        projects: {
+          type: Type.ARRAY, 
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              name: { type: Type.STRING },
+              technologies: { type: Type.STRING },
+              link: { type: Type.STRING },
+              description: { type: Type.STRING }
+            }
+          }
+        },
+        education: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              degree: { type: Type.STRING },
+              school: { type: Type.STRING },
+              year: { type: Type.STRING },
+              grade: { type: Type.STRING }
+            }
+          }
+        }
+      }
+    };
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [{ parts: [{ text: prompt }] }],
       config: {
-        responseMimeType: 'application/json'
+        responseMimeType: 'application/json',
+        responseSchema: schema
       }
     });
 
@@ -469,7 +595,9 @@ export const generateAvatar = async (
   imageBase64: string,
   stylePrompt: string
 ): Promise<string> => {
+  const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const { mimeType, data } = parseDataUrl(imageBase64);
@@ -494,6 +622,7 @@ export const generateAvatar = async (
           },
         ],
       },
+      // Note: Do NOT set responseMimeType or responseSchema for image generation models
     });
 
     for (const part of response.candidates?.[0]?.content?.parts || []) {
@@ -510,7 +639,9 @@ export const generateAvatar = async (
 };
 
 export const parseResumeFromDocument = async (fileBase64: string): Promise<Partial<Resume>> => {
+  const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const { mimeType, data } = parseDataUrl(fileBase64);
@@ -523,21 +654,57 @@ export const parseResumeFromDocument = async (fileBase64: string): Promise<Parti
        Example: "• Developed X.\n• Achieved Y."
     3. **General**: Plain text only. No markdown formatting in values (no bold, no italics).
     
-    Schema:
-    {
-      "fullName": "string",
-      "email": "string",
-      "phone": "string",
-      "linkedin": "string",
-      "location": "string",
-      "summary": "string",
-      "skills": "string",
-      "experience": [ { "role": "string", "company": "string", "startDate": "string", "endDate": "string", "description": "string" } ],
-      "projects": [ { "name": "string", "technologies": "string", "link": "string", "description": "string" } ],
-      "education": [ { "degree": "string", "school": "string", "year": "string", "grade": "string" } ]
-    }
-    
     Return ONLY the raw JSON string.`;
+
+    const schema: Schema = {
+      type: Type.OBJECT,
+      properties: {
+        fullName: { type: Type.STRING },
+        email: { type: Type.STRING },
+        phone: { type: Type.STRING },
+        linkedin: { type: Type.STRING },
+        location: { type: Type.STRING },
+        summary: { type: Type.STRING },
+        skills: { type: Type.STRING },
+        experience: { 
+          type: Type.ARRAY, 
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              role: { type: Type.STRING },
+              company: { type: Type.STRING },
+              startDate: { type: Type.STRING },
+              endDate: { type: Type.STRING },
+              description: { type: Type.STRING }
+            }
+          }
+        },
+        projects: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              technologies: { type: Type.STRING },
+              link: { type: Type.STRING },
+              description: { type: Type.STRING }
+            }
+          }
+        },
+        education: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              degree: { type: Type.STRING },
+              school: { type: Type.STRING },
+              year: { type: Type.STRING },
+              grade: { type: Type.STRING }
+            }
+          }
+        }
+      }
+    };
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -551,6 +718,10 @@ export const parseResumeFromDocument = async (fileBase64: string): Promise<Parti
           },
           { text: prompt }
         ]
+      },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: schema
       }
     });
 
@@ -575,7 +746,9 @@ export const chatWithChatur = async (
   userMessage: string,
   contextData: any
 ): Promise<string> => {
+  const apiKey = getApiKey();
   if (!apiKey) return "I'm having trouble connecting to my brain right now. Please check your API key.";
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const systemInstruction = `You are Chatur, an expert AI Career Coach embedded in the application "JobJumper AI".
@@ -645,4 +818,338 @@ export const chatWithChatur = async (
     console.error("Chatur Error:", error);
     return "I'm feeling a bit overwhelmed. Let's try again in a moment.";
   }
+};
+
+// --- AGENT MODE FUNCTIONS ---
+
+export interface AnalyzerResult {
+  keyInfo: {
+    company: string;
+    role: string;
+    location: string;
+    salary: string;
+    experience: string;
+    workMode: string;
+  };
+  skills: {
+    technical: { name: string; status: 'matched' | 'missing' }[];
+    soft: string[];
+    niceToHave: string[];
+  };
+  matchAnalysis: {
+    overallScore: number;
+    technicalMatch: { score: number; reason: string };
+    experienceMatch: { score: number; reason: string };
+    roleMatch: { score: number; reason: string };
+  };
+  redFlags: string[];
+  competitiveAnalysis: {
+    level: string; // 'Low' | 'Medium' | 'High'
+    poolSize: string;
+    differentiators: string[];
+  };
+  recommendation: {
+    status: string; // 'Strong Apply' | 'Conditional Apply' | 'Skip'
+    reason: string;
+  };
+}
+
+export const runAgentAnalyzer = async (jobDescription: string, resume: Resume): Promise<AnalyzerResult> => {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key is missing.");
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `
+    You are an expert technical recruiter and job market analyst. Compare the provided Candidate Resume against the Job Description (JD).
+
+    CANDIDATE RESUME JSON:
+    ${JSON.stringify(resume)}
+
+    JOB DESCRIPTION:
+    ${jobDescription.substring(0, 5000)}
+
+    Analyze the job description and candidate fit deeply. Return a strictly structured JSON response.
+
+    GUIDELINES:
+    1. **Key Info Extraction**: Extract explicit details from the JD. If not mentioned, use "Not specified".
+    2. **Skill Matching**: 
+       - List all technical skills mentioned in the JD.
+       - For EACH skill, check if it is present in the Candidate Resume JSON (look in 'skills', 'experience', 'projects', 'summary').
+       - If present: status = 'matched'
+       - If missing: status = 'missing'
+    3. **Scoring**:
+       - Overall: Weighted average (Tech 50%, Exp 30%, Role 20%).
+       - Tech Match: Hard skills overlap.
+       - Exp Match: Years of experience & seniority alignment.
+       - Role Match: Industry/Domain relevance.
+    4. **Red Flags**: Look for "unicorn" requirements, vague terms, or bad WLB indicators.
+    5. **Competitive Analysis**: Estimate how hard it is to get this role based on market trends.
+    6. **Recommendation**: Be decisive. 
+       - "Strong Apply" if score > 80.
+       - "Conditional Apply" if score 50-79.
+       - "Skip" if score < 50 or major red flags.
+  `;
+
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      keyInfo: {
+        type: Type.OBJECT,
+        properties: {
+          company: { type: Type.STRING },
+          role: { type: Type.STRING },
+          location: { type: Type.STRING },
+          salary: { type: Type.STRING },
+          experience: { type: Type.STRING },
+          workMode: { type: Type.STRING }
+        },
+        required: ["company", "role", "location", "salary", "experience", "workMode"]
+      },
+      skills: {
+        type: Type.OBJECT,
+        properties: {
+          technical: { 
+            type: Type.ARRAY, 
+            items: { 
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING },
+                status: { type: Type.STRING, enum: ['matched', 'missing'] }
+              },
+              required: ['name', 'status']
+            } 
+          },
+          soft: { type: Type.ARRAY, items: { type: Type.STRING } },
+          niceToHave: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["technical", "soft", "niceToHave"]
+      },
+      matchAnalysis: {
+        type: Type.OBJECT,
+        properties: {
+          overallScore: { type: Type.NUMBER },
+          technicalMatch: { 
+            type: Type.OBJECT, 
+            properties: {
+              score: { type: Type.NUMBER },
+              reason: { type: Type.STRING }
+            },
+            required: ["score", "reason"]
+          },
+          experienceMatch: { 
+            type: Type.OBJECT, 
+            properties: {
+              score: { type: Type.NUMBER },
+              reason: { type: Type.STRING }
+            },
+            required: ["score", "reason"]
+          },
+          roleMatch: { 
+            type: Type.OBJECT, 
+            properties: {
+              score: { type: Type.NUMBER },
+              reason: { type: Type.STRING }
+            },
+            required: ["score", "reason"]
+          }
+        },
+        required: ["overallScore", "technicalMatch", "experienceMatch", "roleMatch"]
+      },
+      redFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
+      competitiveAnalysis: {
+        type: Type.OBJECT,
+        properties: {
+          level: { type: Type.STRING, enum: ["Low", "Medium", "High"] },
+          poolSize: { type: Type.STRING },
+          differentiators: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["level", "poolSize", "differentiators"]
+      },
+      recommendation: {
+        type: Type.OBJECT,
+        properties: {
+          status: { type: Type.STRING, enum: ["Strong Apply", "Conditional Apply", "Skip"] },
+          reason: { type: Type.STRING }
+        },
+        required: ["status", "reason"]
+      }
+    },
+    required: ["keyInfo", "skills", "matchAnalysis", "redFlags", "competitiveAnalysis", "recommendation"]
+  };
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+    config: { 
+      responseMimeType: 'application/json',
+      responseSchema: schema
+    }
+  });
+
+  const text = response.text || "{}";
+  const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+  return JSON.parse(cleanText) as AnalyzerResult;
+};
+
+export const runAgentInterviewPrep = async (company: string, role: string, jd: string): Promise<string> => {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key is missing.");
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `
+    You are an expert interview coach. Create a comprehensive interview preparation kit for this role:
+    Company: ${company}
+    Role: ${role}
+    Job Description: ${jd.substring(0, 3000)}
+    Provide:
+
+    Company Research Brief (2-3 paragraphs):
+
+    Recent news or developments
+    Company culture and values
+    Known interview style
+
+
+    Technical Interview Questions (10-15 questions):
+
+    Role-specific technical questions likely to be asked
+    For each question, provide a brief hint on how to approach it
+
+
+    Behavioral Interview Questions (5-8 questions):
+
+    Common behavioral questions for this role
+    For each, provide a STAR method framework answer template
+
+
+    Smart Questions to Ask (5 questions):
+
+    Thoughtful questions the candidate should ask the interviewer
+    Questions that show research and genuine interest
+
+    Keep answers concise and actionable.
+
+    Provide output in MARKDOWN format with these exact Level 1 headers:
+
+    # Company Research Brief
+    # Technical Interview Questions
+    # Behavioral Interview Questions
+    # Smart Questions to Ask
+  `;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt
+  });
+  return response.text || "";
+};
+
+export const runAgentDocumentGen = async (
+  type: 'Cover Letter' | 'Resume Bullets' | 'LinkedIn Message', 
+  jd: string, 
+  background: string
+): Promise<string> => {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key is missing.");
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `
+    You are an expert career document writer. Generate a ${type} for this job application.
+    Job Description:
+    ${jd.substring(0, 3000)}
+    Candidate Background:
+    ${background.substring(0, 2000)}
+    Instructions based on document type:
+    IF Cover Letter:
+
+    Write a compelling 3-paragraph cover letter (250-300 words)
+    Paragraph 1: Hook - why you're excited about this specific role
+    Paragraph 2: Proof - 2-3 relevant achievements that match their needs
+    Paragraph 3: Close - call to action
+    Use professional but warm tone
+    Include specific keywords from the job description
+
+    IF Resume Bullets:
+
+    Generate 5-7 achievement-focused bullet points
+    Use action verbs and quantify results where possible
+    Tailor each bullet to match required skills in the job description
+    Format: [Action Verb] + [What you did] + [Impact/Result]
+
+    IF LinkedIn Message:
+
+    Write a 2-3 sentence personalized message to a recruiter/hiring manager
+    Mention specific aspect of the company/role that interests you
+    Keep it under 300 characters, professional yet conversational
+    Include a clear call to action (request for coffee chat/call)
+
+    Make content specific, authentic, and ATS-friendly.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt
+  });
+  return response.text || "";
+};
+
+export const runAgentResearch = async (company: string, role: string): Promise<string> => {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key is missing.");
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `
+    You are a "Deep Research Agent" specialized in corporate intelligence and candidate advocacy. 
+    Conduct a very comprehensive and deep-dive 'india-specific' investigation into the following opportunity, specifically looking for "insider" information often found on Reddit, Blind, and Glassdoor.
+
+    Target Company: ${company}
+    Target Role: ${role}
+
+    INSTRUCTIONS:
+    1. **Structure**: Use the exact Markdown structure below. Use Emojis for visual scanning. Leave Space and a </br> after each Paragraphs and sections. Make sure the entire document does not look cluttery
+    2. **Reddit/Blind Crawl**: actively simulate searching subreddits like r/cscareerquestions, r/salary, r/experienceddevs for real talk on WLB (Work Life Balance), RTO (Return To Office) mandates, and culture.
+    3. **Tone**: Professional but "insider" - candid and high-signal.
+
+    Research Steps (conduct each sequentially):
+STEP 1 - Company Overview:
+
+Industry and business model
+Company size and stage (startup/scaleup/enterprise)
+Key products or services
+Notable clients or partnerships
+
+STEP 2 - Recent Developments:
+
+Any recent news (funding, acquisitions, launches)
+Company growth trajectory
+Glassdoor rating summary (culture insights)
+Reddit reviews and pros and cons summary
+
+STEP 3 - Compensation Intelligence:
+
+Typical salary range for ${role} in India
+Equity/ESOP expectations for company stage
+Benefits commonly offered
+
+STEP 4 - Hiring Intelligence:
+
+Typical hiring process for similar roles
+Interview rounds and timeline
+Key decision makers (if publicly available)
+
+STEP 5 - Outreach Strategy:
+
+Best approach to apply (direct/referral/LinkedIn)
+Key points to emphasize in application
+Timeline recommendation (when to follow up)
+Networking suggestions
+
+  
+  `;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt
+  });
+  return response.text || "";
 };

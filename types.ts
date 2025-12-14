@@ -1,3 +1,4 @@
+
 export type JobStatus = 'Applied' | 'Interview' | 'Offer' | 'Rejected' | 'Accepted';
 
 export interface Attachment {
@@ -114,4 +115,12 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-export type ViewState = 'dashboard' | 'applications' | 'offers' | 'resume' | 'avatar' | 'schedule' | 'settings' | 'chat';
+export interface ResearchReport {
+  id: string;
+  company: string;
+  role: string;
+  date: string;
+  content: string; // Markdown content
+}
+
+export type ViewState = 'dashboard' | 'applications' | 'offers' | 'resume' | 'avatar' | 'schedule' | 'settings' | 'chat' | 'agents';

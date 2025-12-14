@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Job, Resume, ChatMessage } from '../types';
+import { Job, Resume, ChatMessage, ResearchReport } from '../types';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from './AuthContext';
 
@@ -28,6 +28,11 @@ interface JobContextType {
   clearChat: () => void;
   isChatInitialized: boolean;
   setChatInitialized: (initialized: boolean) => void;
+
+  // Research Persistence
+  researchHistory: ResearchReport[];
+  addResearchReport: (report: ResearchReport) => void;
+  deleteResearchReport: (id: string) => void;
 }
 
 const JobContext = createContext<JobContextType | undefined>(undefined);
@@ -57,6 +62,9 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatInitialized, setChatInitialized] = useState(false);
 
+  // Research State
+  const [researchHistory, setResearchHistory] = useState<ResearchReport[]>([]);
+
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
         const saved = localStorage.getItem('theme');
@@ -72,6 +80,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setJobs([]);
         setResume(DEFAULT_RESUME);
         setChatMessages([]);
+        setResearchHistory([]);
         setLoading(false);
         return;
     }
@@ -98,7 +107,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             console.error("Error fetching jobs:", JSON.stringify(jobError));
           }
 
-          // Fetch Profile/Resume AND Chat History
+          // Fetch Profile/Resume AND Chat History AND Research History
           // Use select('*') to avoid errors if specific columns (like chat_history) are missing in the schema
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
@@ -130,13 +139,27 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     }
                 }
             }
+
+            // Load Research History
+            if (profileData.research_history && Array.isArray(profileData.research_history)) {
+                setResearchHistory(profileData.research_history);
+            } else {
+                 const localResearch = localStorage.getItem(`research_history_${user.id}`);
+                 if (localResearch) {
+                     try {
+                         const parsed = JSON.parse(localResearch);
+                         setResearchHistory(parsed);
+                     } catch (e) {
+                         console.error("Error parsing local research history", e);
+                     }
+                 }
+            }
+
           } else {
             if (profileError) {
                 console.warn("Profile fetch error (might be creating new one):", JSON.stringify(profileError));
             }
             // Initialize profile if not exists
-            // IMPORTANT: Do NOT include 'chat_history' in the initial upsert if the column is missing in DB.
-            // We only upsert 'resume_data' which is likely safer.
             const { error: insertError } = await supabase
                 .from('profiles')
                 .upsert(
@@ -145,7 +168,6 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 );
                 
             if (insertError) {
-                // If 23505 (duplicate key), it's fine, another request created it.
                 if (insertError.code !== '23505') {
                     console.error("Error creating profile:", JSON.stringify(insertError));
                 }
@@ -244,7 +266,6 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setChatMessages(prev => {
         const newHistory = [...prev, message];
         
-        // Persist to Database (Try DB first, fallback to LocalStorage)
         if (user) {
             supabase
               .from('profiles')
@@ -252,16 +273,12 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               .eq('id', user.id)
               .then(({ error }) => {
                  if (error) {
-                    console.warn("Failed to save chat to DB (using LocalStorage fallback):", JSON.stringify(error));
                     localStorage.setItem(`chat_history_${user.id}`, JSON.stringify(newHistory));
                  } else {
-                    // Clear local storage if DB save success to keep it clean? 
-                    // Or keep it as backup. Keeping as backup is safer.
                     localStorage.setItem(`chat_history_${user.id}`, JSON.stringify(newHistory));
                  }
               });
         }
-        
         return newHistory;
     });
   };
@@ -270,9 +287,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setChatMessages([]);
     setChatInitialized(false);
     if (user) {
-        // Clear both DB and LocalStorage
         localStorage.removeItem(`chat_history_${user.id}`);
-        
         supabase
           .from('profiles')
           .update({ chat_history: [] })
@@ -281,6 +296,49 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
              if (error) console.error("Failed to clear chat history in DB", JSON.stringify(error));
           });
     }
+  };
+
+  const addResearchReport = (report: ResearchReport) => {
+      setResearchHistory(prev => {
+          const newHistory = [report, ...prev];
+          
+          if (user) {
+              supabase
+                .from('profiles')
+                .update({ research_history: newHistory })
+                .eq('id', user.id)
+                .then(({ error }) => {
+                    // Fallback
+                    if (error) {
+                         console.warn("DB Save failed, using local storage", error);
+                         localStorage.setItem(`research_history_${user.id}`, JSON.stringify(newHistory));
+                    } else {
+                         localStorage.setItem(`research_history_${user.id}`, JSON.stringify(newHistory));
+                    }
+                });
+          }
+          return newHistory;
+      });
+  };
+
+  const deleteResearchReport = (id: string) => {
+      setResearchHistory(prev => {
+          const newHistory = prev.filter(r => r.id !== id);
+          if (user) {
+              supabase
+                .from('profiles')
+                .update({ research_history: newHistory })
+                .eq('id', user.id)
+                .then(({ error }) => {
+                    if (error) {
+                        localStorage.setItem(`research_history_${user.id}`, JSON.stringify(newHistory));
+                    } else {
+                        localStorage.setItem(`research_history_${user.id}`, JSON.stringify(newHistory));
+                    }
+                });
+          }
+          return newHistory;
+      });
   };
 
   const loadDemoData = async () => {
@@ -395,7 +453,8 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <JobContext.Provider value={{ 
         jobs, resume, addJob, updateJob, deleteJob, updateResume, loadDemoData, stats, theme, toggleTheme, loading,
-        chatMessages, addChatMessage, clearChat, isChatInitialized, setChatInitialized
+        chatMessages, addChatMessage, clearChat, isChatInitialized, setChatInitialized,
+        researchHistory, addResearchReport, deleteResearchReport
     }}>
       {children}
     </JobContext.Provider>

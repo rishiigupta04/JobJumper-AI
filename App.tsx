@@ -11,6 +11,7 @@ import Schedule from './components/Schedule';
 import Chatur from './components/Chatur';
 import Settings from './components/Settings';
 import Auth from './components/Auth';
+import AgentsDashboard from './components/AgentsDashboard';
 import { ViewState } from './types';
 import { Sun, Moon, LogOut, Loader2, Settings as SettingsIcon } from 'lucide-react';
 
@@ -22,7 +23,7 @@ const MainContent: React.FC = () => {
   const renderView = () => {
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard setView={setCurrentView} />;
       case 'applications':
         return <JobList />;
       case 'offers':
@@ -37,8 +38,10 @@ const MainContent: React.FC = () => {
         return <Settings />;
       case 'chat':
         return <Chatur />;
+      case 'agents':
+        return <AgentsDashboard setView={setCurrentView} />;
       default:
-        return <Dashboard />;
+        return <Dashboard setView={setCurrentView} />;
     }
   };
 
@@ -48,6 +51,11 @@ const MainContent: React.FC = () => {
             <Loader2 className="animate-spin text-indigo-600" size={40} />
         </div>
     );
+  }
+
+  // If in Agent Mode, render full screen without standard sidebar
+  if (currentView === 'agents') {
+     return <AgentsDashboard setView={setCurrentView} />;
   }
 
   return (

@@ -1,7 +1,12 @@
 import React from 'react';
 import { useJobContext } from '../context/JobContext';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Users, CheckCircle, Briefcase, XCircle, FileText } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle, FileText, XCircle, Sparkles, ArrowRight, Bot } from 'lucide-react';
+import { ViewState } from '../types';
+
+interface DashboardProps {
+  setView?: (view: ViewState) => void;
+}
 
 const StatCard = ({ title, value, icon: Icon, colorClass, gradient }: any) => (
   <div className={`relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-sm border border-slate-100 dark:border-slate-800 transition-all hover:shadow-md group`}>
@@ -20,7 +25,19 @@ const StatCard = ({ title, value, icon: Icon, colorClass, gradient }: any) => (
   </div>
 );
 
-const Dashboard: React.FC = () => {
+// We need to access setView to switch to agents mode. 
+// Since Dashboard is rendered by App.tsx -> MainContent -> renderView, we need to pass setView down or access it via context if we moved view state to context.
+// Ideally, ViewState should be in context, but currently it's in App.tsx. 
+// For now, I'll rely on the parent passing props or refactoring.
+// However, the Sidebar component receives setView. We can modify MainContent to pass setView to Dashboard.
+// To avoid breaking App.tsx too much, let's assume Sidebar usage style: Dashboard({ setView })
+
+// Wait, MainContent in App.tsx doesn't pass props to Dashboard. 
+// I will update App.tsx to pass setView to Dashboard, or move ViewState to JobContext.
+// Moving ViewState to JobContext is cleaner but requires large refactor.
+// Easier fix: Pass setView from MainContent to Dashboard.
+
+const Dashboard: React.FC<{ setView?: (view: ViewState) => void }> = ({ setView }) => {
   const { jobs, stats } = useJobContext();
 
   // Prepare chart data (Applications over last 7 days)
@@ -40,6 +57,33 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-fade-in">
+      
+      {/* Agent Mode Entry Card */}
+      <div 
+        onClick={() => setView && setView('agents')}
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 to-indigo-900 p-8 shadow-xl shadow-indigo-900/20 border border-indigo-500/30 cursor-pointer group transition-transform hover:scale-[1.01]"
+      >
+        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity text-white">
+            <Bot size={120} />
+        </div>
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+        
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-bold uppercase tracking-wider mb-3 backdrop-blur-sm">
+                    <Sparkles size={12} /> New Feature
+                </div>
+                <h2 className="text-3xl font-bold text-white mb-2">Enter Agent Mode</h2>
+                <p className="text-indigo-200 max-w-xl">
+                    Deploy autonomous AI agents to analyze job descriptions, conduct deep company research, generate interview prep kits, and craft tailored documents.
+                </p>
+            </div>
+            <button className="px-6 py-3 bg-white text-indigo-900 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-50 transition-colors shadow-lg">
+                Launch Agents <ArrowRight size={18} />
+            </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           title="Total Applied" 
