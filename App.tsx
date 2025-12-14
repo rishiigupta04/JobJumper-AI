@@ -12,7 +12,7 @@ import Chatur from './components/Chatur';
 import Settings from './components/Settings';
 import Auth from './components/Auth';
 import { ViewState } from './types';
-import { Sun, Moon, LogOut, Loader2 } from 'lucide-react';
+import { Sun, Moon, LogOut, Loader2, Settings as SettingsIcon } from 'lucide-react';
 
 const MainContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
@@ -35,6 +35,8 @@ const MainContent: React.FC = () => {
         return <Schedule />;
       case 'settings':
         return <Settings />;
+      case 'chat':
+        return <Chatur />;
       default:
         return <Dashboard />;
     }
@@ -60,6 +62,7 @@ const MainContent: React.FC = () => {
                 <h1 className="text-2xl font-bold text-slate-900 dark:text-white capitalize">
                   {currentView === 'resume' ? 'Resume Builder' : 
                    currentView === 'avatar' ? 'AI Avatar Studio' :
+                   currentView === 'chat' ? 'AI Career Companion' :
                    currentView.replace(/([A-Z])/g, ' $1').trim()}
                 </h1>
                 <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
@@ -75,6 +78,19 @@ const MainContent: React.FC = () => {
                   aria-label="Toggle Dark Mode"
                 >
                   {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+                </button>
+
+                {/* Settings Button */}
+                <button
+                   onClick={() => setCurrentView('settings')}
+                   className={`p-2 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all ${
+                     currentView === 'settings' 
+                       ? 'bg-indigo-50 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400' 
+                       : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                   }`}
+                   title="Settings"
+                >
+                   <SettingsIcon size={20} />
                 </button>
 
                 <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -96,11 +112,6 @@ const MainContent: React.FC = () => {
           {renderView()}
         </div>
       </main>
-
-      {/* Floating Chat Component */}
-      <div className="print:hidden">
-        <Chatur />
-      </div>
     </div>
   );
 }

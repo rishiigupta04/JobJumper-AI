@@ -113,4 +113,4 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-export type ViewState = 'dashboard' | 'applications' | 'offers' | 'resume' | 'avatar' | 'schedule' | 'settings';
+export type ViewState = 'dashboard' | 'applications' | 'offers' | 'resume' | 'avatar' | 'schedule' | 'settings' | 'chat';

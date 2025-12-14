@@ -60,7 +60,7 @@ const Auth: React.FC = () => {
             </h1>
             
             <p className="text-lg text-slate-400 leading-relaxed max-w-xl">
-                GetAJ*b is your unfair advantage in the modern job market. We streamline your entire search—from parsing resumes and generating hyper-personalized cover letters to simulating interviews and crafting salary negotiation strategies.
+                JobJumper AI is your unfair advantage in the modern job market. We streamline your entire search—from parsing resumes and generating hyper-personalized cover letters to simulating interviews and crafting salary negotiation strategies.
             </p>
 
             <div className="space-y-4">
@@ -88,11 +88,11 @@ const Auth: React.FC = () => {
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 opacity-50"></div>
 
                 {/* Mobile Logo/Title */}
-                <div className="lg:hidden text-center mb-8">
-                     <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-900/50">
-                        <Briefcase className="text-white" size={24} />
+                <div className="lg:hidden flex flex-col items-center mb-8">
+                     <div className="h-16 w-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-500/30 mb-4 animate-bounce">
+                        <Briefcase className="text-white" size={32} strokeWidth={2.5} />
                     </div>
-                    <h1 className="text-2xl font-bold text-white">GetAJ*b</h1>
+                    <h1 className="text-2xl font-bold text-white">JobJumper AI</h1>
                     <p className="text-slate-400 text-sm mt-2">AI-Powered Career Command Center</p>
                 </div>
 

@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { useJobContext } from '../context/JobContext';
-import { enhanceResumeText, parseResumeFromImage, enhanceFullResume } from '../services/geminiService';
+import { enhanceResumeText, parseResumeFromImage, enhanceFullResume, tailorResume } from '../services/geminiService';
 import { 
   FileText, Sparkles, Plus, Trash2, MapPin, Mail, Phone, Linkedin, 
-  GraduationCap, Briefcase, Loader2, FolderGit2, UploadCloud, Wand2, Download
+  GraduationCap, Briefcase, Loader2, FolderGit2, UploadCloud, Wand2, Download, Target, X
 } from 'lucide-react';
 import { Experience, Education, Project, Resume } from '../types';
 
@@ -20,11 +20,68 @@ const ResumeBuilder: React.FC = () => {
   const [isEnhancing, setIsEnhancing] = useState<string | null>(null);
   const [isFullEnhancing, setIsFullEnhancing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  
+  // Tailor Resume State
+  const [isTailoring, setIsTailoring] = useState(false);
+  const [showTailorModal, setShowTailorModal] = useState(false);
+  const [tailorJd, setTailorJd] = useState('');
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Helper for input styles
   const inputClass = "w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none placeholder:text-slate-400 text-sm";
   const labelClass = "block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider";
+
+  // Helper to parse **bold** markdown and format bullet points
+  const renderFormattedText = (text: string | any) => {
+    if (!text) return null;
+    
+    // Safety check: ensure text is a string
+    let safeText = "";
+    if (Array.isArray(text)) {
+        safeText = text.join('\n');
+    } else if (typeof text !== 'string') {
+        safeText = String(text);
+    } else {
+        safeText = text;
+    }
+
+    const lines = safeText.split('\n').filter(line => line.trim());
+
+    // Parse bold segments helper
+    const parseBold = (str: string) => {
+        const parts = str.split(/(\*\*.*?\*\*)/g);
+        return parts.map((part, index) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={index} className="font-bold text-slate-900">{part.slice(2, -2)}</strong>;
+            }
+            return <span key={index}>{part}</span>;
+        });
+    };
+
+    return (
+      <ul className="list-none space-y-1">
+        {lines.map((line, i) => {
+            const trimmed = line.trim();
+            // Check for common bullet markers
+            const isBullet = /^[•\-\*]/.test(trimmed);
+            // Remove bullet marker for clean rendering
+            const cleanText = trimmed.replace(/^[•\-\*]\s?/, '');
+
+            return (
+                <li key={i} className={`flex items-start ${isBullet ? 'gap-2.5 pl-1' : ''}`}>
+                    {isBullet && (
+                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-slate-700 flex-shrink-0" />
+                    )}
+                    <span className="flex-1 leading-relaxed text-slate-700 text-justify">
+                        {parseBold(cleanText)}
+                    </span>
+                </li>
+            );
+        })}
+      </ul>
+    );
+  };
 
   const handleEnhance = async (text: string, type: 'summary' | 'experience' | 'project', id?: string) => {
     const loadingKey = id || type;
@@ -58,27 +115,7 @@ const ResumeBuilder: React.FC = () => {
     setIsFullEnhancing(true);
     try {
         const enhanced = await enhanceFullResume(resume);
-        
-        const newResume: Resume = {
-            ...resume, // Keep original as base (preserves avatar, etc.)
-            ...enhanced, // Apply AI changes
-            avatarImage: resume.avatarImage, // Explicitly preserve avatar as it's stripped in service
-            // Ensure IDs are present and valid, using AI returned IDs if available or fallback to original
-            experience: (enhanced.experience || []).map((e, i) => ({
-                ...e, 
-                id: e.id || resume.experience[i]?.id || generateId()
-            })),
-            projects: (enhanced.projects || []).map((p, i) => ({
-                ...p, 
-                id: p.id || resume.projects[i]?.id || generateId()
-            })),
-            education: (enhanced.education || []).map((e, i) => ({
-                ...e, 
-                id: e.id || resume.education[i]?.id || generateId()
-            }))
-        };
-        
-        updateResume(newResume);
+        applyResumeUpdates(enhanced);
         alert("Resume enhanced successfully!");
     } catch (e: any) {
         console.error(e);
@@ -86,6 +123,47 @@ const ResumeBuilder: React.FC = () => {
     } finally {
         setIsFullEnhancing(false);
     }
+  };
+
+  const handleTailorResume = async () => {
+    if (!tailorJd.trim()) return;
+
+    setIsTailoring(true);
+    try {
+        const tailored = await tailorResume(resume, tailorJd);
+        applyResumeUpdates(tailored);
+        setShowTailorModal(false);
+        setTailorJd('');
+        alert("Resume successfully tailored to the Job Description!");
+    } catch (e: any) {
+        console.error(e);
+        alert(`Failed to tailor resume. ${e.message || 'Please try again.'}`);
+    } finally {
+        setIsTailoring(false);
+    }
+  };
+
+  const applyResumeUpdates = (enhanced: Resume) => {
+      const newResume: Resume = {
+          ...resume, // Keep original as base (preserves avatar, etc.)
+          ...enhanced, // Apply AI changes
+          avatarImage: resume.avatarImage, // Explicitly preserve avatar as it's stripped in service
+          // Ensure IDs are present and valid, using AI returned IDs if available or fallback to original
+          experience: (enhanced.experience || []).map((e, i) => ({
+              ...e, 
+              id: e.id || resume.experience[i]?.id || generateId()
+          })),
+          projects: (enhanced.projects || []).map((p, i) => ({
+              ...p, 
+              id: p.id || resume.projects[i]?.id || generateId()
+          })),
+          education: (enhanced.education || []).map((e, i) => ({
+              ...e, 
+              id: e.id || resume.education[i]?.id || generateId()
+          }))
+      };
+      
+      updateResume(newResume);
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -223,16 +301,16 @@ const ResumeBuilder: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                {/* Intelligent Import */}
                <div className="relative">
                   <button 
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isImporting || isFullEnhancing}
-                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 text-slate-700 dark:text-slate-300 px-4 py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-sm"
+                    disabled={isImporting || isFullEnhancing || isTailoring}
+                    className="w-full h-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 text-slate-700 dark:text-slate-300 px-3 py-3 rounded-xl text-xs font-medium flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-sm"
                   >
-                    {isImporting ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={18} className="text-indigo-500" />}
-                    {isImporting ? 'Analyzing...' : 'Import from Image'}
+                    {isImporting ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={20} className="text-indigo-500" />}
+                    {isImporting ? 'Analyzing...' : 'Import Image'}
                   </button>
                   <input 
                     type="file" 
@@ -243,14 +321,24 @@ const ResumeBuilder: React.FC = () => {
                   />
                </div>
 
+               {/* Tailor Resume */}
+               <button 
+                  onClick={() => setShowTailorModal(true)}
+                  disabled={isImporting || isFullEnhancing || isTailoring}
+                  className="w-full h-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-purple-500 dark:hover:border-purple-500 text-slate-700 dark:text-slate-300 px-3 py-3 rounded-xl text-xs font-medium flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-sm"
+               >
+                  {isTailoring ? <Loader2 size={16} className="animate-spin" /> : <Target size={20} className="text-purple-500" />}
+                  {isTailoring ? 'Tailoring...' : 'Tailor to JD'}
+               </button>
+
                {/* Full Enhancement */}
                <button 
                   onClick={handleFullEnhancement}
-                  disabled={isImporting || isFullEnhancing}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-lg shadow-indigo-200 dark:shadow-none"
+                  disabled={isImporting || isFullEnhancing || isTailoring}
+                  className="w-full h-full bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-3 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-lg shadow-indigo-200 dark:shadow-none"
                >
-                  {isFullEnhancing ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={18} />}
-                  {isFullEnhancing ? 'Polishing...' : 'Magic Polish Resume'}
+                  {isFullEnhancing ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={20} />}
+                  {isFullEnhancing ? 'Polishing...' : 'Magic Polish'}
                </button>
             </div>
           </div>
@@ -312,9 +400,9 @@ const ResumeBuilder: React.FC = () => {
               className={`${inputClass} min-h-[80px]`}
               value={resume.skills} 
               onChange={e => updateResume({...resume, skills: e.target.value})}
-              placeholder="React, TypeScript, Node.js, Project Management..."
+              placeholder="React | TypeScript | Node.js | Project Management..."
             />
-            <p className="text-xs text-slate-500 mt-2">Separate skills with commas.</p>
+            <p className="text-xs text-slate-500 mt-2">Separate skills with vertical bars (|).</p>
           </section>
 
           {/* Experience */}
@@ -510,7 +598,9 @@ const ResumeBuilder: React.FC = () => {
               {resume.summary && (
                 <div className="mb-6">
                   <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-2 pb-1">Professional Summary</h2>
-                  <p className="text-sm text-slate-700 leading-relaxed text-justify">{resume.summary}</p>
+                  <div className="text-sm text-slate-700 leading-relaxed text-justify">
+                    {renderFormattedText(resume.summary)}
+                  </div>
                 </div>
               )}
 
@@ -534,7 +624,9 @@ const ResumeBuilder: React.FC = () => {
                           <span className="text-xs font-semibold text-slate-500">{exp.startDate} - {exp.endDate}</span>
                         </div>
                         <div className="text-xs font-semibold text-slate-600 mb-2">{exp.company}</div>
-                        <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{exp.description}</div>
+                        <div className="text-sm text-slate-700 leading-relaxed">
+                            {renderFormattedText(exp.description)}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -553,7 +645,9 @@ const ResumeBuilder: React.FC = () => {
                            {proj.link && <span className="text-xs text-indigo-600 italic">{proj.link}</span>}
                          </div>
                          <div className="text-xs font-semibold text-slate-500 mb-2">{proj.technologies}</div>
-                         <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{proj.description}</div>
+                         <div className="text-sm text-slate-700 leading-relaxed">
+                            {renderFormattedText(proj.description)}
+                         </div>
                        </div>
                      ))}
                    </div>
@@ -580,6 +674,58 @@ const ResumeBuilder: React.FC = () => {
             </div>
         </div>
       </div>
+
+      {/* Tailor Resume Modal */}
+      {showTailorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg p-6 animate-fade-in border border-slate-200 dark:border-slate-800">
+              <div className="flex justify-between items-center mb-6">
+                 <div>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Target size={20} className="text-purple-600" /> Tailor to Job
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Optimize your resume for a specific role and ATS.</p>
+                 </div>
+                 <button onClick={() => setShowTailorModal(false)} className="text-slate-400 hover:text-slate-600">
+                    <X size={24} />
+                 </button>
+              </div>
+
+              <div className="mb-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-800/50">
+                  <p className="text-sm text-purple-800 dark:text-purple-200 font-medium">
+                      The AI will rewrite your <strong>Summary</strong>, <strong>Experience</strong>, and <strong>Skills</strong> to match keywords from the Job Description below.
+                  </p>
+              </div>
+
+              <div className="mb-6">
+                 <label className={labelClass}>Job Description (JD)</label>
+                 <textarea 
+                    className="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none resize-y min-h-[200px] text-sm"
+                    placeholder="Paste the full job description here..."
+                    value={tailorJd}
+                    onChange={(e) => setTailorJd(e.target.value)}
+                 />
+              </div>
+
+              <div className="flex justify-end gap-3">
+                 <button 
+                    onClick={() => setShowTailorModal(false)}
+                    className="px-4 py-2 text-slate-500 hover:text-slate-700 font-medium"
+                 >
+                    Cancel
+                 </button>
+                 <button 
+                    onClick={handleTailorResume}
+                    disabled={!tailorJd.trim() || isTailoring}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-bold shadow-lg shadow-purple-200 dark:shadow-none transition-all flex items-center gap-2 disabled:opacity-70"
+                 >
+                    {isTailoring ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />}
+                    {isTailoring ? 'Optimizing...' : 'Tailor Resume'}
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 };
