@@ -842,7 +842,7 @@ const AgentResearch: React.FC<AgentResearchProps> = ({ researchState, setResearc
                 <div className="animate-fade-in space-y-6">
                    {/* Summary Metrics */}
                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {renderMetric('Opportunity Score', `${report.summary.opportunityScore}/100`, TrendingUp, 'indigo')}
+                      {renderMetric('Opportunity Score', `${report.summary.opportunityScore}/10`, TrendingUp, 'indigo')}
                       {renderMetric('Risk Level', report.risks.level, Shield, report.risks.level === 'High' ? 'rose' : report.risks.level === 'Medium' ? 'amber' : 'emerald')}
                       {renderMetric('Apply Priority', report.summary.applyPriority, BarChart3, 'blue')}
                    </div>
