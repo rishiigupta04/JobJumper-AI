@@ -1093,63 +1093,173 @@ export const runAgentDocumentGen = async (
   return response.text || "";
 };
 
-export const runAgentResearch = async (company: string, role: string): Promise<string> => {
+export interface ResearchResult {
+  companyName: string;
+  roleTitle: string;
+  summary: {
+    opportunityScore: number;
+    applyPriority: string;
+    verdict: string;
+    nextSteps: string[];
+  };
+  companyIntelligence: {
+    overview: string;
+    sizeAndStage: string;
+    competitors: string[];
+    financialHealth: string;
+  };
+  marketAnalysis: {
+    recentNews: string[];
+    marketPosition: string;
+  };
+  culture: {
+    workEnvironment: string;
+    engineeringCulture: string;
+  };
+  compensation: {
+    salaryRange: string;
+    comparison: string;
+    benefits: string[];
+  };
+  hiring: {
+    process: string[];
+    applicationStrategy: string;
+  };
+  risks: {
+    level: string;
+    concerns: string[];
+  };
+  strategy: {
+    outreach: string;
+    differentiators: string[];
+  };
+  reviews: {
+    glassdoor: { rating: string; pros: string; cons: string };
+    reddit: { sentiment: string; keyDiscussions: string[] };
+    employeeVoices: { source: string; quote: string }[];
+  };
+  sources: { title: string; url: string }[];
+}
+
+export const validateResearchResult = (data: any): ResearchResult => {
+  return {
+    companyName: data?.companyName || "Unknown Company",
+    roleTitle: data?.roleTitle || "Unknown Role",
+    summary: {
+      opportunityScore: data?.summary?.opportunityScore || 0,
+      applyPriority: data?.summary?.applyPriority || "Low",
+      verdict: data?.summary?.verdict || "No verdict provided.",
+      nextSteps: data?.summary?.nextSteps || []
+    },
+    companyIntelligence: {
+      overview: data?.companyIntelligence?.overview || "Not available.",
+      sizeAndStage: data?.companyIntelligence?.sizeAndStage || "Not available.",
+      competitors: data?.companyIntelligence?.competitors || [],
+      financialHealth: data?.companyIntelligence?.financialHealth || "Not available."
+    },
+    marketAnalysis: {
+      recentNews: data?.marketAnalysis?.recentNews || [],
+      marketPosition: data?.marketAnalysis?.marketPosition || "Not available."
+    },
+    culture: {
+      workEnvironment: data?.culture?.workEnvironment || "Not available.",
+      engineeringCulture: data?.culture?.engineeringCulture || "Not available."
+    },
+    compensation: {
+      salaryRange: data?.compensation?.salaryRange || "Not available",
+      comparison: data?.compensation?.comparison || "",
+      benefits: data?.compensation?.benefits || []
+    },
+    hiring: {
+      process: data?.hiring?.process || [],
+      applicationStrategy: data?.hiring?.applicationStrategy || ""
+    },
+    risks: {
+      level: data?.risks?.level || "Medium",
+      concerns: data?.risks?.concerns || []
+    },
+    strategy: {
+      outreach: data?.strategy?.outreach || "",
+      differentiators: data?.strategy?.differentiators || []
+    },
+    reviews: {
+      glassdoor: {
+        rating: data?.reviews?.glassdoor?.rating || "N/A",
+        pros: data?.reviews?.glassdoor?.pros || "",
+        cons: data?.reviews?.glassdoor?.cons || ""
+      },
+      reddit: {
+        sentiment: data?.reviews?.reddit?.sentiment || "Neutral",
+        keyDiscussions: data?.reviews?.reddit?.keyDiscussions || []
+      },
+      employeeVoices: data?.reviews?.employeeVoices || []
+    },
+    sources: data?.sources || []
+  };
+};
+
+export const runAgentResearch = async (company: string, role: string): Promise<ResearchResult> => {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
   const ai = new GoogleGenAI({ apiKey });
 
   const prompt = `
-    You are a "Deep Research Agent" specialized in corporate intelligence and candidate advocacy. 
-    Conduct a very comprehensive and deep-dive 'india-specific' investigation into the following opportunity, specifically looking for "insider" information often found on Reddit, Blind, and Glassdoor.
+    You are an autonomous research agent specializing in Indian and Global job market intelligence. 
+    Conduct multi-step research on this opportunity using Google Search and provide a detailed actionable report in JSON format.
 
     Target Company: ${company}
     Target Role: ${role}
 
-    INSTRUCTIONS:
-    1. **Structure**: Use the exact Markdown structure below. Use Emojis for visual scanning. Leave Space and a </br> after each Paragraphs and sections. Make sure the entire document does not look cluttery
-    2. **Reddit/Blind Crawl**: actively simulate searching subreddits like r/cscareerquestions, r/salary, r/experienceddevs for real talk on WLB (Work Life Balance), RTO (Return To Office) mandates, and culture.
-    3. **Tone**: Professional but "insider" - candid and high-signal.
+    SEARCH STRATEGY:
+    1. Use Google Search to find real-time data.
+    2. Specifically look for **Glassdoor reviews for ${company} in India** (or global if India not available).
+    3. Look for **Reddit threads** on r/developersIndia, r/csMajors, or r/jobs about ${company} work culture.
+    4. Find **salary data** on Levels.fyi, AmbitionBox, or Glassdoor for India (INR).
+    5. Look for **Interview Questions, Candidate Experiences, and Employee Reviews** specifically. Prioritize this over general news.
 
-    Research Steps (conduct each sequentially):
-STEP 1 - Company Overview:
+    Conduct systematic research and provide findings adhering to the JSON structure below.
+    
+    Structure the response as a valid JSON object with the following schema:
+    {
+      "companyName": "string",
+      "roleTitle": "string",
+      "summary": { "opportunityScore": number, "applyPriority": "High" | "Medium" | "Low", "verdict": "string", "nextSteps": ["string"] },
+      "companyIntelligence": { "overview": "string", "sizeAndStage": "string", "competitors": ["string"], "financialHealth": "string" },
+      "marketAnalysis": { "recentNews": ["string"], "marketPosition": "string" },
+      "culture": { "workEnvironment": "string", "engineeringCulture": "string" },
+      "compensation": { "salaryRange": "string", "comparison": "string", "benefits": ["string"] },
+      "hiring": { "process": ["string"], "applicationStrategy": "string" },
+      "risks": { "level": "Low" | "Medium" | "High", "concerns": ["string"] },
+      "strategy": { "outreach": "string", "differentiators": ["string"] },
+      "reviews": {
+        "glassdoor": { "rating": "string", "pros": "string", "cons": "string" },
+        "reddit": { "sentiment": "string", "keyDiscussions": ["string"] },
+        "employeeVoices": [{ "source": "string", "quote": "string" }]
+      },
+      "sources": [{ "title": "string", "url": "string" }]
+    }
 
-Industry and business model
-Company size and stage (startup/scaleup/enterprise)
-Key products or services
-Notable clients or partnerships
-
-STEP 2 - Recent Developments:
-
-Any recent news (funding, acquisitions, launches)
-Company growth trajectory
-Glassdoor rating summary (culture insights)
-Reddit reviews and pros and cons summary
-
-STEP 3 - Compensation Intelligence:
-
-Typical salary range for ${role} in India
-Equity/ESOP expectations for company stage
-Benefits commonly offered
-
-STEP 4 - Hiring Intelligence:
-
-Typical hiring process for similar roles
-Interview rounds and timeline
-Key decision makers (if publicly available)
-
-STEP 5 - Outreach Strategy:
-
-Best approach to apply (direct/referral/LinkedIn)
-Key points to emphasize in application
-Timeline recommendation (when to follow up)
-Networking suggestions
-
-  
+    IMPORTANT RULES:
+    1. Return ONLY the raw JSON string. Do not include markdown code blocks or explanations.
+    2. **Sources**: List exactly **top 5** most relevant URLs focused on interview questions, candidate experiences, and detailed employee reviews. Do NOT provide generic homepages.
   `;
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
-    contents: prompt
+    contents: prompt,
+    config: { 
+      tools: [{ googleSearch: {} }] // Enable Google Search
+    }
   });
-  return response.text || "";
+
+  const text = response.text || "{}";
+  const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+  
+  try {
+      const parsed = JSON.parse(cleanText);
+      return validateResearchResult(parsed);
+  } catch (e) {
+      console.error("Failed to parse JSON from research agent", e);
+      throw new Error("Failed to generate structured report. Please try again.");
+  }
 };

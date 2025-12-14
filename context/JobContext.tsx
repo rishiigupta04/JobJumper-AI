@@ -107,7 +107,7 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             console.error("Error fetching jobs:", JSON.stringify(jobError));
           }
 
-          // Fetch Profile/Resume AND Chat History AND Research History
+          // Fetch Profile/Resume AND Chat History
           // Use select('*') to avoid errors if specific columns (like chat_history) are missing in the schema
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
@@ -139,22 +139,6 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     }
                 }
             }
-
-            // Load Research History
-            if (profileData.research_history && Array.isArray(profileData.research_history)) {
-                setResearchHistory(profileData.research_history);
-            } else {
-                 const localResearch = localStorage.getItem(`research_history_${user.id}`);
-                 if (localResearch) {
-                     try {
-                         const parsed = JSON.parse(localResearch);
-                         setResearchHistory(parsed);
-                     } catch (e) {
-                         console.error("Error parsing local research history", e);
-                     }
-                 }
-            }
-
           } else {
             if (profileError) {
                 console.warn("Profile fetch error (might be creating new one):", JSON.stringify(profileError));
@@ -173,6 +157,37 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }
             }
           }
+
+          // Load Research Reports from Dedicated Table
+          const { data: reportsData, error: reportsError } = await supabase
+            .from('research_reports')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+
+          if (reportsData) {
+             const mappedReports = reportsData.map(r => ({
+                 id: r.id,
+                 company: r.company,
+                 role: r.role,
+                 date: r.created_at, // Mapping DB 'created_at' to 'date'
+                 content: r.content
+             }));
+             setResearchHistory(mappedReports);
+          } else {
+             if (reportsError) console.warn("Error fetching research reports (DB might be missing table):", reportsError);
+             
+             // Fallback to LocalStorage
+             const localResearch = localStorage.getItem(`research_history_${user.id}`);
+             if (localResearch) {
+                 try {
+                     setResearchHistory(JSON.parse(localResearch));
+                 } catch (e) {
+                     console.error("Error parsing local research history", e);
+                 }
+             }
+          }
+
       } catch (err) {
           console.error("Unexpected error loading data:", err);
       } finally {
@@ -298,47 +313,60 @@ export const JobProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const addResearchReport = (report: ResearchReport) => {
-      setResearchHistory(prev => {
-          const newHistory = [report, ...prev];
-          
-          if (user) {
-              supabase
-                .from('profiles')
-                .update({ research_history: newHistory })
-                .eq('id', user.id)
-                .then(({ error }) => {
-                    // Fallback
-                    if (error) {
-                         console.warn("DB Save failed, using local storage", error);
-                         localStorage.setItem(`research_history_${user.id}`, JSON.stringify(newHistory));
-                    } else {
-                         localStorage.setItem(`research_history_${user.id}`, JSON.stringify(newHistory));
-                    }
-                });
+  const addResearchReport = async (report: ResearchReport) => {
+      // Optimistic update
+      setResearchHistory(prev => [report, ...prev]);
+      
+      if (user) {
+          const { error } = await supabase
+            .from('research_reports')
+            .insert({
+                id: report.id,
+                user_id: user.id,
+                company: report.company,
+                role: report.role,
+                content: report.content,
+                created_at: report.date
+            });
+            
+          if (error) {
+              console.error("Failed to save report to DB:", error);
+              // Fallback to local storage
+              const currentHistory = [report, ...researchHistory];
+              localStorage.setItem(`research_history_${user.id}`, JSON.stringify(currentHistory));
+          } else {
+              // Sync local storage as backup
+              const currentHistory = [report, ...researchHistory];
+              localStorage.setItem(`research_history_${user.id}`, JSON.stringify(currentHistory));
           }
-          return newHistory;
-      });
+      } else {
+          // Guest mode fallback
+          const currentHistory = [report, ...researchHistory];
+          localStorage.setItem('research_history_guest', JSON.stringify(currentHistory));
+      }
   };
 
-  const deleteResearchReport = (id: string) => {
-      setResearchHistory(prev => {
-          const newHistory = prev.filter(r => r.id !== id);
-          if (user) {
-              supabase
-                .from('profiles')
-                .update({ research_history: newHistory })
-                .eq('id', user.id)
-                .then(({ error }) => {
-                    if (error) {
-                        localStorage.setItem(`research_history_${user.id}`, JSON.stringify(newHistory));
-                    } else {
-                        localStorage.setItem(`research_history_${user.id}`, JSON.stringify(newHistory));
-                    }
-                });
+  const deleteResearchReport = async (id: string) => {
+      // Optimistic update
+      setResearchHistory(prev => prev.filter(r => r.id !== id));
+      
+      if (user) {
+          const { error } = await supabase
+            .from('research_reports')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', user.id);
+            
+          if (error) {
+             console.error("Failed to delete report from DB:", error);
+             // Update local fallback just in case
+             const newHistory = researchHistory.filter(r => r.id !== id);
+             localStorage.setItem(`research_history_${user.id}`, JSON.stringify(newHistory));
+          } else {
+             const newHistory = researchHistory.filter(r => r.id !== id);
+             localStorage.setItem(`research_history_${user.id}`, JSON.stringify(newHistory));
           }
-          return newHistory;
-      });
+      }
   };
 
   const loadDemoData = async () => {
