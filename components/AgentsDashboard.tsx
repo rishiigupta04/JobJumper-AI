@@ -6,7 +6,8 @@ import {
   Sparkles, Loader2, Copy, Check, AlertTriangle, Briefcase, 
   ChevronRight, Target, PenTool, Telescope, Layers, ArrowRight,
   History, Clock, Trash2, PlusCircle, CheckCircle2, XCircle, MapPin, IndianRupee, Code2, Users, Crown, Zap, RefreshCw,
-  TrendingUp, Shield, BarChart3, Building2, Globe, HeartHandshake, Lightbulb, Link as LinkIcon, Star, MessageCircle, AlertOctagon, ThumbsUp, ThumbsDown, Quote
+  TrendingUp, Shield, BarChart3, Building2, Globe, HeartHandshake, Lightbulb, Link as LinkIcon, Star, MessageCircle, AlertOctagon, ThumbsUp, ThumbsDown, Quote,
+  PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { 
@@ -22,6 +23,7 @@ type AgentType = 'analyzer' | 'prep' | 'docs' | 'research';
 
 const AgentsDashboard: React.FC<AgentsDashboardProps> = ({ setView }) => {
   const [activeAgent, setActiveAgent] = useState<AgentType>('analyzer');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { resume } = useJobContext();
 
   // Sidebar Items
@@ -46,58 +48,81 @@ const AgentsDashboard: React.FC<AgentsDashboardProps> = ({ setView }) => {
     <div className="flex h-screen bg-slate-950 text-white font-sans overflow-hidden">
       
       {/* Agent Sidebar */}
-      <div className="w-72 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl">
-        <div className="p-6 border-b border-slate-800">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-500/30">
-               <Bot size={24} className="text-white" />
-            </div>
-            <div>
-               <h1 className="font-bold text-lg tracking-tight">Agent Mode</h1>
-               <p className="text-xs text-slate-400">Autonomous Career AI</p>
-            </div>
-          </div>
-          <button 
-            onClick={() => setView('dashboard')}
-            className="w-full py-2 px-3 flex items-center gap-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors text-sm font-medium border border-slate-700"
-          >
-            <ArrowLeft size={16} /> Exit to Dashboard
-          </button>
-        </div>
-
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {agents.map((agent) => {
-            const Icon = agent.icon;
-            const isActive = activeAgent === agent.id;
-            return (
-              <button
-                key={agent.id}
-                onClick={() => setActiveAgent(agent.id as AgentType)}
-                className={`w-full text-left p-3 rounded-xl transition-all border ${
-                  isActive 
-                    ? 'bg-indigo-600/10 border-indigo-500/50 text-white shadow-lg shadow-indigo-900/20' 
-                    : 'bg-transparent border-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-1">
-                   <Icon size={18} className={isActive ? 'text-indigo-400' : 'text-slate-500'} />
-                   <span className="font-bold text-sm">{agent.label}</span>
+      <div 
+        className={`${isSidebarOpen ? 'w-72 border-r' : 'w-0 border-none'} bg-slate-900 border-slate-800 flex flex-col z-20 shadow-xl transition-all duration-300 ease-in-out relative overflow-hidden`}
+      >
+        <div className={`w-72 flex flex-col h-full ${isSidebarOpen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200 min-w-[18rem]`}>
+            <div className="p-6 border-b border-slate-800">
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-500/30">
+                    <Bot size={24} className="text-white" />
+                    </div>
+                    <div>
+                    <h1 className="font-bold text-lg tracking-tight">Agent Mode</h1>
+                    <p className="text-xs text-slate-400">Autonomous Career AI</p>
+                    </div>
                 </div>
-                <p className="text-xs opacity-70 pl-8 leading-tight">{agent.desc}</p>
-              </button>
-            );
-          })}
-        </nav>
+                <button 
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="text-slate-500 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors"
+                    title="Collapse Sidebar"
+                >
+                    <PanelLeftClose size={20} />
+                </button>
+            </div>
+            <button 
+                onClick={() => setView('dashboard')}
+                className="w-full py-2 px-3 flex items-center gap-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors text-sm font-medium border border-slate-700"
+            >
+                <ArrowLeft size={16} /> Exit to Dashboard
+            </button>
+            </div>
 
-        <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-           <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Sparkles size={12} /> Powered by Gemini 2.0 Flash
-           </div>
+            <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+            {agents.map((agent) => {
+                const Icon = agent.icon;
+                const isActive = activeAgent === agent.id;
+                return (
+                <button
+                    key={agent.id}
+                    onClick={() => setActiveAgent(agent.id as AgentType)}
+                    className={`w-full text-left p-3 rounded-xl transition-all border ${
+                    isActive 
+                        ? 'bg-indigo-600/10 border-indigo-500/50 text-white shadow-lg shadow-indigo-900/20' 
+                        : 'bg-transparent border-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    }`}
+                >
+                    <div className="flex items-center gap-3 mb-1">
+                    <Icon size={18} className={isActive ? 'text-indigo-400' : 'text-slate-500'} />
+                    <span className="font-bold text-sm">{agent.label}</span>
+                    </div>
+                    <p className="text-xs opacity-70 pl-8 leading-tight">{agent.desc}</p>
+                </button>
+                );
+            })}
+            </nav>
+
+            <div className="p-4 border-t border-slate-800 bg-slate-900/50">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Sparkles size={12} /> Powered by Gemini 2.0 Flash
+            </div>
+            </div>
         </div>
       </div>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-950 relative">
+         {/* Toggle Button when sidebar is closed */}
+         <div className={`absolute top-6 left-6 z-50 transition-all duration-300 ${isSidebarOpen ? 'opacity-0 pointer-events-none -translate-x-4' : 'opacity-100 translate-x-0'}`}>
+            <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 shadow-lg transition-all flex items-center gap-2"
+            >
+                <PanelLeftOpen size={20} />
+            </button>
+         </div>
+
          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
          <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
          
@@ -937,7 +962,7 @@ const AgentResearch = () => {
                                   <div className="flex items-center gap-1.5 text-emerald-400 font-black text-2xl bg-emerald-950/50 px-3 py-1 rounded-xl border border-emerald-900/50">
                                      {report.reviews.glassdoor?.rating || 'N/A'} <Star size={20} fill="currentColor" />
                                   </div>
-                               </div>
+                                </div>
                                <div className="space-y-3">
                                   <div className="flex gap-3 text-sm">
                                      <ThumbsUp size={16} className="text-emerald-500 mt-0.5 shrink-0" />
