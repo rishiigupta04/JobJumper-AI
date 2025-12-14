@@ -4,6 +4,13 @@ import { chatWithChatur } from '../services/geminiService';
 import { ChatMessage } from '../types';
 import { MessageCircle, X, Send, User, Sparkles, MinusCircle, Loader2 } from 'lucide-react';
 
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+};
+
 const Chatur: React.FC = () => {
   const { stats, jobs } = useJobContext();
   const [isOpen, setIsOpen] = useState(false);
@@ -46,7 +53,7 @@ const Chatur: React.FC = () => {
     if (!input.trim()) return;
 
     const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       role: 'user',
       text: input,
       timestamp: Date.now()
@@ -64,7 +71,7 @@ const Chatur: React.FC = () => {
     const responseText = await chatWithChatur(messages, userMsg.text, contextData);
 
     const botMsg: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       role: 'model',
       text: responseText,
       timestamp: Date.now()

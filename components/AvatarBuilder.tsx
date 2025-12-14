@@ -1,15 +1,18 @@
 import React, { useState, useRef } from 'react';
 import { generateAvatar } from '../services/geminiService';
+import { useJobContext } from '../context/JobContext';
 import { 
   Camera, Upload, Sparkles, Download, RefreshCw, 
-  Image as ImageIcon, Loader2, Wand2 
+  Image as ImageIcon, Loader2, Wand2, Save 
 } from 'lucide-react';
 
 const AvatarBuilder: React.FC = () => {
+  const { resume, updateResume } = useJobContext();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,6 +56,20 @@ const AvatarBuilder: React.FC = () => {
       setError("Failed to generate avatar. Please try again.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveToProfile = async () => {
+    if (!generatedImage) return;
+    setIsSaving(true);
+    try {
+        await updateResume({ ...resume, avatarImage: generatedImage });
+        alert("Avatar saved to profile successfully!");
+    } catch (err) {
+        console.error("Failed to save avatar", err);
+        setError("Failed to save avatar.");
+    } finally {
+        setIsSaving(false);
     }
   };
 
@@ -188,19 +205,38 @@ const AvatarBuilder: React.FC = () => {
       <div className="flex-1 bg-slate-100 dark:bg-slate-950 p-6 lg:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col">
         <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]">
           {generatedImage ? (
-            <div className="relative group w-full max-w-md aspect-square rounded-2xl overflow-hidden shadow-2xl ring-4 ring-white dark:ring-slate-800">
-              <img 
-                src={generatedImage} 
-                alt="Generated Avatar" 
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                 <button 
-                   onClick={downloadImage}
-                   className="bg-white text-slate-900 px-6 py-3 rounded-full font-bold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-all hover:scale-105"
-                 >
-                   <Download size={20} /> Download
-                 </button>
+            <div className="flex flex-col items-center gap-6 w-full max-w-md">
+              <div className="relative group w-full aspect-square rounded-2xl overflow-hidden shadow-2xl ring-4 ring-white dark:ring-slate-800">
+                <img 
+                  src={generatedImage} 
+                  alt="Generated Avatar" 
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                   <button 
+                     onClick={downloadImage}
+                     className="bg-white text-slate-900 px-4 py-2 rounded-full font-bold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-all hover:scale-105"
+                   >
+                     <Download size={16} /> Save File
+                   </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col w-full gap-3">
+                <button 
+                    onClick={handleSaveToProfile}
+                    disabled={isSaving}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-indigo-500/30 transition-all"
+                >
+                    {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+                    Set as Profile Picture
+                </button>
+                <button 
+                    onClick={downloadImage}
+                    className="w-full bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-8 py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
+                >
+                    <Download size={20} /> Download Image
+                </button>
               </div>
             </div>
           ) : (

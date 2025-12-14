@@ -1,8 +1,27 @@
 import { GoogleGenAI } from "@google/genai";
 import { Resume, ChatMessage } from "../types";
 
-const apiKey = process.env.API_KEY || '';
+// Safely access process.env to prevent crashes in browser environments
+const getApiKey = () => {
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env.API_KEY || '';
+  }
+  return '';
+};
+
+const apiKey = getApiKey();
 const ai = new GoogleGenAI({ apiKey });
+
+// Helper to extract clean base64 and mimeType
+const parseDataUrl = (dataUrl: string) => {
+  const matches = dataUrl.match(/^data:(.+);base64,(.+)$/);
+  if (matches) {
+    return { mimeType: matches[1], data: matches[2] };
+  }
+  // Fallback if already stripped or malformed, default to jpeg but return raw
+  // This handles cases where the input might just be the base64 string
+  return { mimeType: 'image/jpeg', data: dataUrl.replace(/^data:image\/\w+;base64,/, "") };
+};
 
 export const generateCoverLetter = async (
   jobRole: string,
@@ -10,7 +29,7 @@ export const generateCoverLetter = async (
   userSkills: string,
   jobDescription?: string
 ): Promise<string> => {
-  if (!apiKey) return "Error: API Key is missing.";
+  if (!apiKey) return "Error: API Key is missing. Please check your configuration.";
 
   try {
     const prompt = `Write a passionate and professional cover letter for the role of ${jobRole} at ${company}. 
@@ -30,26 +49,104 @@ export const generateCoverLetter = async (
   }
 };
 
-export const generateOfferStrategy = async (
+export const generateInterviewGuide = async (
   jobRole: string,
   company: string,
-  salary: string
+  description: string
 ): Promise<string> => {
   if (!apiKey) return "Error: API Key is missing.";
 
   try {
-    const prompt = `I have received a job offer for ${jobRole} at ${company} with a salary/package of ${salary}. 
-    Provide a negotiation strategy, 3 key questions I should ask before accepting, and a brief checklist for success in the first 90 days. 
-    Format the output with clear Markdown headings.`;
+    const prompt = `
+      Act as a world-class technical career coach. Create a STRATEGIC INTERVIEW PREP GUIDE for the role of ${jobRole} at ${company}.
+      
+      Context from Job Description:
+      "${description ? description.substring(0, 2000) : 'No description provided.'}"
+
+      Produce the output in clean, structured Markdown. Use standard headings (##, ###) and lists.
+      
+      Structure the response exactly like this:
+
+      ## 🧠 Mental Model & Core Focus
+      A brief 2-sentence summary of the "persona" the candidate should adopt for this specific role (e.g., "The Proactive Problem Solver").
+
+      ## ⚡ Key Technical Refreshers
+      Identify 3-4 specific concepts or technologies from the JD that are critical.
+      *   **Concept Name**: One sentence refresher or key talking point.
+
+      ## ❓ Top Anticipated Questions
+      Provide 3 high-probability questions (mix of technical and behavioral).
+      
+      ### Q1: [Question text]
+      *   **Why they ask**: [Brief reason]
+      *   **Key points to hit**: [Bullet points]
+
+      ### Q2: [Question text]
+      *   **Why they ask**: [Brief reason]
+      *   **Key points to hit**: [Bullet points]
+
+      ### Q3: [Question text]
+      *   **Why they ask**: [Brief reason]
+      *   **Key points to hit**: [Bullet points]
+
+      ## 🚀 "Power" Questions to Ask Them
+      List 3 questions the candidate should ask the interviewer to show deep insight.
+    `;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
     });
 
-    return response.text || "Failed to generate offer strategy.";
+    return response.text || "Failed to generate interview guide.";
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("Gemini Interview Guide Error:", error);
+    return "An error occurred while creating the interview guide.";
+  }
+};
+
+export const generateNegotiationStrategy = async (
+  jobRole: string,
+  company: string,
+  salary: string,
+  description: string
+): Promise<string> => {
+  if (!apiKey) return "Error: API Key is missing.";
+
+  try {
+    const prompt = `
+      Act as a high-stakes salary negotiation coach. I have an offer for ${jobRole} at ${company}.
+      Salary/Package offered: ${salary}
+      
+      Job Context:
+      "${description ? description.substring(0, 1000) : 'No description provided.'}"
+      
+      Provide a strategic plan in Markdown. Use clear headings.
+
+      ## 📊 Market Analysis
+      *   **Role Value**: Estimate the market perception of this role.
+      *   **Leverage Points**: List 2 specific items from the JD or role type that give the candidate bargaining power.
+
+      ## 💬 The Negotiation Script
+      Write a specific script for the "Ask".
+      > "[Insert polite but firm script here...]"
+
+      ## 🎁 Plan B: The Perks
+      If base salary is capped, list 3 specific non-monetary terms to ask for (e.g., Sign-on, Equity, Remote days).
+
+      ## ⛔ What NOT to Say
+      *   [Avoid saying this]
+      *   [Avoid saying this]
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+
+    return response.text || "Failed to generate negotiation strategy.";
+  } catch (error) {
+    console.error("Gemini Negotiation Error:", error);
     return "An error occurred while analyzing the offer.";
   }
 };
@@ -85,6 +182,81 @@ export const enhanceResumeText = async (
   }
 };
 
+export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> => {
+  if (!apiKey) throw new Error("API Key is missing.");
+
+  try {
+    // SECURITY/PERFORMANCE: Explicitly construct a clean payload to prevent sending large binary data or extra properties.
+    // This fixes issues where 'avatarImage' or other large fields cause INVALID_ARGUMENT errors.
+    const cleanResume = {
+        fullName: currentResume.fullName || "",
+        email: currentResume.email || "",
+        phone: currentResume.phone || "",
+        linkedin: currentResume.linkedin || "",
+        location: currentResume.location || "",
+        summary: currentResume.summary || "",
+        skills: currentResume.skills || "",
+        jobTitle: currentResume.jobTitle || "",
+        experience: (currentResume.experience || []).map(e => ({
+            id: e.id,
+            role: e.role,
+            company: e.company,
+            startDate: e.startDate,
+            endDate: e.endDate,
+            description: e.description
+        })),
+        projects: (currentResume.projects || []).map(p => ({
+            id: p.id,
+            name: p.name,
+            technologies: p.technologies,
+            link: p.link,
+            description: p.description
+        })),
+        education: (currentResume.education || []).map(e => ({
+            id: e.id,
+            degree: e.degree,
+            school: e.school,
+            year: e.year
+        }))
+    };
+
+    const prompt = `
+    Act as a world-class executive resume writer. 
+    Rewrite the content of the provided resume JSON to be highly professional, impactful, and ATS-friendly.
+    
+    Specific Instructions:
+    1. **Summary**: Create a compelling, results-oriented professional narrative.
+    2. **Experience**: Convert descriptions/bullets into "Action Verb + Task + Result" format. Use strong verbs (e.g. Orchestrated, Engineered, Optimized). Quantify achievements where possible.
+    3. **Projects**: Emphasize technical challenges, specific stack details, and business outcomes.
+    4. **Skills**: Ensure list is comma-separated, professional, and relevant.
+    5. **Personal Details**: Keep Name, Email, Phone, Links, Location EXACTLY as is.
+    6. **Structure**: Keep the exact same JSON structure. **PRESERVE ALL 'id' fields exactly.**
+    
+    Resume JSON:
+    ${JSON.stringify(cleanResume)}
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: 'application/json'
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No response");
+
+    // Clean potential markdown wrapping even with JSON mode
+    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    return JSON.parse(cleanText);
+  } catch (error) {
+    console.error("Gemini Full Enhancement Error:", error);
+    throw error;
+  }
+};
+
 export const generateAvatar = async (
   imageBase64: string,
   stylePrompt: string
@@ -92,8 +264,7 @@ export const generateAvatar = async (
   if (!apiKey) throw new Error("API Key is missing.");
 
   try {
-    // Clean base64 string
-    const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
+    const { mimeType, data } = parseDataUrl(imageBase64);
     
     const prompt = `Transform this portrait into a high-quality professional corporate headshot.
     Style requirements: ${stylePrompt}. 
@@ -106,8 +277,8 @@ export const generateAvatar = async (
         parts: [
           {
             inlineData: {
-              data: base64Data,
-              mimeType: 'image/jpeg',
+              data: data,
+              mimeType: mimeType,
             },
           },
           {
@@ -134,7 +305,7 @@ export const parseResumeFromImage = async (imageBase64: string): Promise<Partial
   if (!apiKey) throw new Error("API Key is missing.");
 
   try {
-    const base64Data = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
+    const { mimeType, data } = parseDataUrl(imageBase64);
     
     const prompt = `Analyze this resume image. Extract structured data into JSON matching the following schema. 
     Improve wording to be action-oriented where possible.
@@ -156,13 +327,13 @@ export const parseResumeFromImage = async (imageBase64: string): Promise<Partial
     Return ONLY the raw JSON string, no markdown formatting.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-2.5-flash',
       contents: {
         parts: [
           {
              inlineData: {
-               data: base64Data,
-               mimeType: 'image/jpeg', // Assuming jpeg/png for simplicity, generally robust
+               data: data,
+               mimeType: mimeType,
              }
           },
           { text: prompt }

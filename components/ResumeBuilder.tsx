@@ -1,16 +1,24 @@
 import React, { useState, useRef } from 'react';
 import { useJobContext } from '../context/JobContext';
-import { enhanceResumeText, parseResumeFromImage } from '../services/geminiService';
+import { enhanceResumeText, parseResumeFromImage, enhanceFullResume } from '../services/geminiService';
 import { 
   FileText, Sparkles, Plus, Trash2, MapPin, Mail, Phone, Linkedin, 
-  GraduationCap, Briefcase, Loader2, FolderGit2, UploadCloud 
+  GraduationCap, Briefcase, Loader2, FolderGit2, UploadCloud, Wand2, Download
 } from 'lucide-react';
 import { Experience, Education, Project, Resume } from '../types';
+
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+};
 
 const ResumeBuilder: React.FC = () => {
   const { resume, updateResume } = useJobContext();
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
   const [isEnhancing, setIsEnhancing] = useState<string | null>(null);
+  const [isFullEnhancing, setIsFullEnhancing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,6 +47,47 @@ const ResumeBuilder: React.FC = () => {
     setIsEnhancing(null);
   };
 
+  const handleFullEnhancement = async () => {
+    if (!resume.experience.length && !resume.summary && !resume.projects.length) {
+        alert("Please add some content to your resume first.");
+        return;
+    }
+
+    if (!window.confirm("This will rewrite your resume descriptions using AI to be more professional. Your contact details will remain safe. Continue?")) return;
+
+    setIsFullEnhancing(true);
+    try {
+        const enhanced = await enhanceFullResume(resume);
+        
+        const newResume: Resume = {
+            ...resume, // Keep original as base (preserves avatar, etc.)
+            ...enhanced, // Apply AI changes
+            avatarImage: resume.avatarImage, // Explicitly preserve avatar as it's stripped in service
+            // Ensure IDs are present and valid, using AI returned IDs if available or fallback to original
+            experience: (enhanced.experience || []).map((e, i) => ({
+                ...e, 
+                id: e.id || resume.experience[i]?.id || generateId()
+            })),
+            projects: (enhanced.projects || []).map((p, i) => ({
+                ...p, 
+                id: p.id || resume.projects[i]?.id || generateId()
+            })),
+            education: (enhanced.education || []).map((e, i) => ({
+                ...e, 
+                id: e.id || resume.education[i]?.id || generateId()
+            }))
+        };
+        
+        updateResume(newResume);
+        alert("Resume enhanced successfully!");
+    } catch (e: any) {
+        console.error(e);
+        alert(`Failed to enhance resume. ${e.message || 'Please try again.'}`);
+    } finally {
+        setIsFullEnhancing(false);
+    }
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -55,9 +104,9 @@ const ResumeBuilder: React.FC = () => {
           const newResume: Resume = {
             ...resume,
             ...parsedData,
-            experience: parsedData.experience?.map(e => ({ ...e, id: crypto.randomUUID() })) || [],
-            projects: parsedData.projects?.map(p => ({ ...p, id: crypto.randomUUID() })) || [],
-            education: parsedData.education?.map(ed => ({ ...ed, id: crypto.randomUUID() })) || [],
+            experience: parsedData.experience?.map(e => ({ ...e, id: generateId() })) || [],
+            projects: parsedData.projects?.map(p => ({ ...p, id: generateId() })) || [],
+            education: parsedData.education?.map(ed => ({ ...ed, id: generateId() })) || [],
           };
           
           updateResume(newResume);
@@ -75,7 +124,7 @@ const ResumeBuilder: React.FC = () => {
 
   const addExperience = () => {
     const newExp: Experience = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       role: '',
       company: '',
       startDate: '',
@@ -98,7 +147,7 @@ const ResumeBuilder: React.FC = () => {
 
   const addProject = () => {
     const newProj: Project = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         name: '',
         technologies: '',
         link: '',
@@ -120,7 +169,7 @@ const ResumeBuilder: React.FC = () => {
 
   const addEducation = () => {
     const newEdu: Education = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       degree: '',
       school: '',
       year: ''
@@ -143,7 +192,7 @@ const ResumeBuilder: React.FC = () => {
     <div className="h-[calc(100vh-140px)] flex flex-col lg:flex-row gap-6">
       
       {/* Mobile Tabs */}
-      <div className="lg:hidden flex mb-4 border-b border-slate-200 dark:border-slate-700">
+      <div className="lg:hidden flex mb-4 border-b border-slate-200 dark:border-slate-700 print:hidden">
         <button 
           onClick={() => setActiveTab('edit')}
           className={`flex-1 py-2 text-sm font-medium ${activeTab === 'edit' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}
@@ -159,31 +208,50 @@ const ResumeBuilder: React.FC = () => {
       </div>
 
       {/* Editor Panel */}
-      <div className={`flex-1 overflow-y-auto pr-2 custom-scrollbar ${activeTab === 'preview' ? 'hidden lg:block' : ''}`}>
+      <div className={`flex-1 overflow-y-auto pr-2 custom-scrollbar print:hidden ${activeTab === 'preview' ? 'hidden lg:block' : ''}`}>
         <div className="space-y-8 pb-10">
           
-          {/* Header Action */}
-          <div className="flex justify-between items-center bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
-            <div>
-              <h3 className="font-bold text-indigo-900 dark:text-indigo-100">Intelligent Import</h3>
-              <p className="text-xs text-indigo-700 dark:text-indigo-300">Upload a resume image to auto-fill details.</p>
+          {/* AI Tools Section */}
+          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-900/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-indigo-600 rounded-lg text-white shadow-lg shadow-indigo-500/30">
+                <Sparkles size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-white">AI Assistant Tools</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Automate your resume creation.</p>
+              </div>
             </div>
-            <div className="relative">
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isImporting}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors disabled:opacity-70"
-              >
-                {isImporting ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
-                {isImporting ? 'Analyzing...' : 'Upload Resume'}
-              </button>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept="image/*" 
-                onChange={handleImport}
-              />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+               {/* Intelligent Import */}
+               <div className="relative">
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isImporting || isFullEnhancing}
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 text-slate-700 dark:text-slate-300 px-4 py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-sm"
+                  >
+                    {isImporting ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={18} className="text-indigo-500" />}
+                    {isImporting ? 'Analyzing...' : 'Import from Image'}
+                  </button>
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept="image/*" 
+                    onChange={handleImport}
+                  />
+               </div>
+
+               {/* Full Enhancement */}
+               <button 
+                  onClick={handleFullEnhancement}
+                  disabled={isImporting || isFullEnhancing}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-70 shadow-lg shadow-indigo-200 dark:shadow-none"
+               >
+                  {isFullEnhancing ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={18} />}
+                  {isFullEnhancing ? 'Polishing...' : 'Magic Polish Resume'}
+               </button>
             </div>
           </div>
 
@@ -195,11 +263,11 @@ const ResumeBuilder: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Full Name</label>
-                <input className={inputClass} value={resume.fullName} onChange={e => updateResume({...resume, fullName: e.target.value})} placeholder="Aryan Sharma" />
+                <input className={inputClass} value={resume.fullName} onChange={e => updateResume({...resume, fullName: e.target.value})} placeholder="Rishiraj Gupta" />
               </div>
               <div>
                 <label className={labelClass}>Email</label>
-                <input className={inputClass} value={resume.email} onChange={e => updateResume({...resume, email: e.target.value})} placeholder="aryan.sharma@example.com" />
+                <input className={inputClass} value={resume.email} onChange={e => updateResume({...resume, email: e.target.value})} placeholder="rishiraj.gupta@example.com" />
               </div>
               <div>
                 <label className={labelClass}>Phone</label>
@@ -211,7 +279,7 @@ const ResumeBuilder: React.FC = () => {
               </div>
               <div className="md:col-span-2">
                 <label className={labelClass}>LinkedIn / Portfolio</label>
-                <input className={inputClass} value={resume.linkedin} onChange={e => updateResume({...resume, linkedin: e.target.value})} placeholder="linkedin.com/in/aryansharma" />
+                <input className={inputClass} value={resume.linkedin} onChange={e => updateResume({...resume, linkedin: e.target.value})} placeholder="https://www.linkedin.com/in/rishirajgupta04/" />
               </div>
             </div>
           </section>
@@ -410,91 +478,106 @@ const ResumeBuilder: React.FC = () => {
       </div>
 
       {/* Preview Panel */}
-      <div className={`flex-1 bg-slate-200 dark:bg-slate-900 p-4 lg:p-8 rounded-2xl overflow-y-auto ${activeTab === 'edit' ? 'hidden lg:block' : ''}`}>
-        <div className="bg-white text-slate-900 w-full max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] shadow-2xl origin-top transform scale-100">
-          
-          {/* Header */}
-          <div className="border-b-2 border-slate-800 pb-4 mb-6">
-            <h1 className="text-3xl font-bold text-slate-900 uppercase tracking-wide mb-2">{resume.fullName}</h1>
-            <div className="flex flex-wrap gap-4 text-xs text-slate-600 font-medium">
-              {resume.email && <span className="flex items-center gap-1"><Mail size={12}/> {resume.email}</span>}
-              {resume.phone && <span className="flex items-center gap-1"><Phone size={12}/> {resume.phone}</span>}
-              {resume.location && <span className="flex items-center gap-1"><MapPin size={12}/> {resume.location}</span>}
-              {resume.linkedin && <span className="flex items-center gap-1"><Linkedin size={12}/> {resume.linkedin}</span>}
-            </div>
-          </div>
+      <div className={`flex-1 bg-slate-200 dark:bg-slate-900 p-4 lg:p-8 rounded-2xl overflow-y-auto print:bg-white print:p-0 print:overflow-visible ${activeTab === 'edit' ? 'hidden lg:block' : ''}`}>
+        
+        {/* Actions Bar */}
+        <div className="mb-4 flex justify-end print:hidden">
+          <button 
+            onClick={() => window.print()}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-md transition-colors"
+          >
+            <Download size={18} />
+            Save as PDF
+          </button>
+        </div>
 
-          {/* Summary */}
-          {resume.summary && (
-            <div className="mb-6">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-2 pb-1">Professional Summary</h2>
-              <p className="text-sm text-slate-700 leading-relaxed text-justify">{resume.summary}</p>
-            </div>
-          )}
-
-          {/* Skills */}
-          {resume.skills && (
-            <div className="mb-6">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-2 pb-1">Technical Skills</h2>
-              <p className="text-sm text-slate-700 leading-relaxed">{resume.skills}</p>
-            </div>
-          )}
-
-          {/* Experience */}
-          {resume.experience.length > 0 && (
-            <div className="mb-6">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-3 pb-1">Experience</h2>
-              <div className="space-y-4">
-                {resume.experience.map(exp => (
-                  <div key={exp.id}>
-                    <div className="flex justify-between items-baseline mb-1">
-                      <h3 className="text-sm font-bold text-slate-900">{exp.role}</h3>
-                      <span className="text-xs font-semibold text-slate-500">{exp.startDate} - {exp.endDate}</span>
-                    </div>
-                    <div className="text-xs font-semibold text-slate-600 mb-2">{exp.company}</div>
-                    <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{exp.description}</div>
-                  </div>
-                ))}
+        {/* Resume Preview */}
+        <div id="resume-preview-container">
+            <div id="resume-preview" className="bg-white text-slate-900 w-full max-w-[210mm] mx-auto min-h-[297mm] p-[10mm] shadow-2xl origin-top transform scale-100 print:shadow-none print:w-full print:max-w-none print:min-h-0">
+              
+              {/* Header */}
+              <div className="border-b-2 border-slate-800 pb-4 mb-6">
+                <h1 className="text-3xl font-bold text-slate-900 uppercase tracking-wide mb-2">{resume.fullName}</h1>
+                <div className="flex flex-wrap gap-4 text-xs text-slate-600 font-medium">
+                  {resume.email && <span className="flex items-center gap-1"><Mail size={12}/> {resume.email}</span>}
+                  {resume.phone && <span className="flex items-center gap-1"><Phone size={12}/> {resume.phone}</span>}
+                  {resume.location && <span className="flex items-center gap-1"><MapPin size={12}/> {resume.location}</span>}
+                  {resume.linkedin && <span className="flex items-center gap-1"><Linkedin size={12}/> {resume.linkedin}</span>}
+                </div>
               </div>
-            </div>
-          )}
 
-          {/* Projects */}
-          {resume.projects && resume.projects.length > 0 && (
-             <div className="mb-6">
-               <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-3 pb-1">Projects</h2>
-               <div className="space-y-4">
-                 {resume.projects.map(proj => (
-                   <div key={proj.id}>
-                     <div className="flex justify-between items-baseline mb-1">
-                       <h3 className="text-sm font-bold text-slate-900">{proj.name}</h3>
-                       {proj.link && <span className="text-xs text-indigo-600 italic">{proj.link}</span>}
-                     </div>
-                     <div className="text-xs font-semibold text-slate-500 mb-2">{proj.technologies}</div>
-                     <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{proj.description}</div>
+              {/* Summary */}
+              {resume.summary && (
+                <div className="mb-6">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-2 pb-1">Professional Summary</h2>
+                  <p className="text-sm text-slate-700 leading-relaxed text-justify">{resume.summary}</p>
+                </div>
+              )}
+
+              {/* Skills */}
+              {resume.skills && (
+                <div className="mb-6">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-2 pb-1">Technical Skills</h2>
+                  <p className="text-sm text-slate-700 leading-relaxed">{resume.skills}</p>
+                </div>
+              )}
+
+              {/* Experience */}
+              {resume.experience.length > 0 && (
+                <div className="mb-6">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-3 pb-1">Experience</h2>
+                  <div className="space-y-4">
+                    {resume.experience.map(exp => (
+                      <div key={exp.id}>
+                        <div className="flex justify-between items-baseline mb-1">
+                          <h3 className="text-sm font-bold text-slate-900">{exp.role}</h3>
+                          <span className="text-xs font-semibold text-slate-500">{exp.startDate} - {exp.endDate}</span>
+                        </div>
+                        <div className="text-xs font-semibold text-slate-600 mb-2">{exp.company}</div>
+                        <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{exp.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Projects */}
+              {resume.projects && resume.projects.length > 0 && (
+                 <div className="mb-6">
+                   <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-3 pb-1">Projects</h2>
+                   <div className="space-y-4">
+                     {resume.projects.map(proj => (
+                       <div key={proj.id}>
+                         <div className="flex justify-between items-baseline mb-1">
+                           <h3 className="text-sm font-bold text-slate-900">{proj.name}</h3>
+                           {proj.link && <span className="text-xs text-indigo-600 italic">{proj.link}</span>}
+                         </div>
+                         <div className="text-xs font-semibold text-slate-500 mb-2">{proj.technologies}</div>
+                         <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{proj.description}</div>
+                       </div>
+                     ))}
                    </div>
-                 ))}
-               </div>
-             </div>
-          )}
+                 </div>
+              )}
 
-          {/* Education */}
-          {resume.education.length > 0 && (
-            <div className="mb-6">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-3 pb-1">Education</h2>
-              <div className="space-y-2">
-                {resume.education.map(edu => (
-                  <div key={edu.id} className="flex justify-between items-baseline">
-                    <div>
-                      <div className="text-sm font-bold text-slate-900">{edu.school}</div>
-                      <div className="text-xs text-slate-600">{edu.degree}</div>
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500">{edu.year}</span>
+              {/* Education */}
+              {resume.education.length > 0 && (
+                <div className="mb-6">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-3 pb-1">Education</h2>
+                  <div className="space-y-2">
+                    {resume.education.map(edu => (
+                      <div key={edu.id} className="flex justify-between items-baseline">
+                        <div>
+                          <div className="text-sm font-bold text-slate-900">{edu.school}</div>
+                          <div className="text-xs text-slate-600">{edu.degree}</div>
+                        </div>
+                        <span className="text-xs font-semibold text-slate-500">{edu.year}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
-          )}
         </div>
       </div>
     </div>

@@ -1,147 +1,545 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useJobContext } from '../context/JobContext';
-import { generateOfferStrategy } from '../services/geminiService';
-import { CheckCircle, Award, ArrowRight, Loader2, Sparkles, AlertCircle } from 'lucide-react';
+import { generateInterviewGuide, generateNegotiationStrategy } from '../services/geminiService';
+import { 
+  Search, Plus, MapPin, Calendar, IndianRupee, Trash2, X, 
+  Sparkles, RefreshCw, User, Mail, Phone, ExternalLink,
+  ChevronRight, Building2, BookOpen, HandCoins, FileText
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { Job } from '../types';
+
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+};
 
 const Offers: React.FC = () => {
-  const { jobs } = useJobContext();
+  const { jobs, deleteJob, addJob, updateJob } = useJobContext();
   const offers = jobs.filter(j => j.status === 'Offer' || j.status === 'Accepted');
   
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
-  const [advice, setAdvice] = useState<Record<string, string>>({});
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // UI State
+  const [activeTab, setActiveTab] = useState<'interview' | 'negotiation' | 'details'>('interview');
+
+  // AI State - Loading only (Data is now in Job object)
   const [loading, setLoading] = useState<Record<string, boolean>>({});
 
-  const handleGenerateAdvice = async (jobId: string, role: string, company: string, salary: string) => {
-    setLoading(prev => ({ ...prev, [jobId]: true }));
-    const result = await generateOfferStrategy(role, company, salary);
-    setAdvice(prev => ({ ...prev, [jobId]: result }));
-    setLoading(prev => ({ ...prev, [jobId]: false }));
+  // Add Offer Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newOffer, setNewOffer] = useState<Partial<Job>>({
+    company: '',
+    role: '',
+    salary: '',
+    location: '',
+    description: '',
+    status: 'Offer'
+  });
+
+  const selectedJob = useMemo(() => 
+    jobs.find(j => j.id === selectedOfferId) || offers[0] || null, 
+  [jobs, selectedOfferId, offers]);
+
+  React.useEffect(() => {
+    if (!selectedJob && offers.length > 0) {
+      setSelectedOfferId(offers[0].id);
+    }
+  }, [offers, selectedJob]);
+
+  const filteredOffers = offers.filter(job => 
+    job.company.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    job.role.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleGenerateInterview = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!selectedJob) return;
+
+    const jobId = selectedJob.id;
+    setLoading(prev => ({ ...prev, [`int_${jobId}`]: true }));
+    
+    const guide = await generateInterviewGuide(
+        selectedJob.role, 
+        selectedJob.company, 
+        selectedJob.description
+    );
+    
+    // Persist to Job Context
+    updateJob(jobId, { interviewGuide: guide });
+    setLoading(prev => ({ ...prev, [`int_${jobId}`]: false }));
   };
 
-  if (offers.length === 0) {
+  const handleGenerateNegotiation = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!selectedJob) return;
+
+    const jobId = selectedJob.id;
+    setLoading(prev => ({ ...prev, [`neg_${jobId}`]: true }));
+    
+    const strategy = await generateNegotiationStrategy(
+        selectedJob.role, 
+        selectedJob.company, 
+        selectedJob.salary || "Not specified",
+        selectedJob.description
+    );
+    
+    // Persist to Job Context
+    updateJob(jobId, { negotiationStrategy: strategy });
+    setLoading(prev => ({ ...prev, [`neg_${jobId}`]: false }));
+  };
+
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (window.confirm('Are you sure you want to delete this offer?')) {
+      deleteJob(id);
+      if (selectedOfferId === id) setSelectedOfferId(null);
+    }
+  };
+
+  const handleSaveNewOffer = () => {
+    if (!newOffer.company || !newOffer.role) return;
+    
+    const job: Job = {
+      id: generateId(),
+      company: newOffer.company,
+      role: newOffer.role,
+      status: 'Offer',
+      salary: newOffer.salary || '',
+      location: newOffer.location || '',
+      dateApplied: new Date().toISOString().split('T')[0],
+      description: newOffer.description || '',
+      coverLetter: '',
+      origin: 'offer',
+      resumeVersion: '',
+      attachments: [],
+      contacts: [],
+      checklist: [],
+      interviewLogs: []
+    };
+    
+    addJob(job);
+    setIsAddModalOpen(false);
+    setSelectedOfferId(job.id);
+    setNewOffer({ company: '', role: '', salary: '', location: '', description: '', status: 'Offer' });
+  };
+
+  const cardBase = "p-4 rounded-xl border transition-all cursor-pointer relative group";
+  const activeCard = "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 ring-1 ring-emerald-500 shadow-sm";
+  const inactiveCard = "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-md";
+
+  // Markdown Custom Styling
+  const MarkdownComponents = {
+    h2: ({node, ...props}: any) => <h2 className="text-xl font-bold text-slate-800 dark:text-emerald-400 mt-8 mb-4 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-2" {...props} />,
+    h3: ({node, ...props}: any) => <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mt-6 mb-3" {...props} />,
+    ul: ({node, ...props}: any) => <ul className="space-y-3 mb-6" {...props} />,
+    li: ({node, ...props}: any) => (
+      <li className="flex gap-2 text-slate-600 dark:text-slate-300 leading-relaxed">
+        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+        <span className="flex-1" {...props} />
+      </li>
+    ),
+    strong: ({node, ...props}: any) => <strong className="font-bold text-slate-900 dark:text-white" {...props} />,
+    blockquote: ({node, ...props}: any) => (
+      <div className="bg-slate-50 dark:bg-slate-800/50 border-l-4 border-emerald-500 p-4 my-6 rounded-r-lg italic text-slate-600 dark:text-slate-300 shadow-sm" {...props} />
+    ),
+    p: ({node, ...props}: any) => <p className="mb-4 leading-relaxed text-slate-600 dark:text-slate-400" {...props} />
+  };
+
+  if (offers.length === 0 && !isAddModalOpen) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-        <div className="p-6 bg-slate-100 dark:bg-slate-800 rounded-full">
-          <Award size={48} className="text-slate-400 dark:text-slate-500" />
+      <div className="flex flex-col items-center justify-center h-[70vh] text-center space-y-6">
+        <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 rounded-full animate-pulse">
+           <Sparkles size={64} className="text-emerald-500" />
         </div>
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-white">No Offers Yet</h2>
-        <p className="text-slate-500 dark:text-slate-400 max-w-md">
-          Keep applying! Once you mark a job as "Offer" or "Accepted", it will appear here with AI negotiation tools.
-        </p>
+        <div>
+          <h2 className="text-3xl font-bold text-slate-800 dark:text-white">No Offers Yet?</h2>
+          <p className="text-slate-500 dark:text-slate-400 max-w-md mt-2 mx-auto">
+            Keep applying! When you get an offer, log it here to unlock AI negotiation superpowers.
+          </p>
+        </div>
+        <button 
+          onClick={() => setIsAddModalOpen(true)}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-emerald-200 dark:shadow-none transition-all flex items-center gap-2"
+        >
+          <Plus size={20} /> Log First Offer
+        </button>
+        
+        {isAddModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-fade-in">
+                <h3 className="text-xl font-bold mb-4 text-slate-900 dark:text-white">Log New Offer</h3>
+                <div className="space-y-4">
+                   <input className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950" placeholder="Company Name" value={newOffer.company} onChange={e => setNewOffer({...newOffer, company: e.target.value})} />
+                   <input className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950" placeholder="Role Title" value={newOffer.role} onChange={e => setNewOffer({...newOffer, role: e.target.value})} />
+                   <input className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950" placeholder="Salary (e.g. ₹12,00,000)" value={newOffer.salary} onChange={e => setNewOffer({...newOffer, salary: e.target.value})} />
+                </div>
+                <div className="flex justify-end gap-3 mt-6">
+                   <button onClick={() => setIsAddModalOpen(false)} className="text-slate-500">Cancel</button>
+                   <button onClick={handleSaveNewOffer} className="bg-emerald-600 text-white px-4 py-2 rounded-lg">Save Offer</button>
+                </div>
+             </div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-3">
-        <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl text-emerald-600 dark:text-emerald-400">
-           <Award size={24} />
-        </div>
-        <div>
-           <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Offers & Negotiation</h2>
-           <p className="text-slate-500 dark:text-slate-400">Manage your wins and get AI-powered negotiation tactics.</p>
-        </div>
+    <div className="h-[calc(100vh-140px)] flex flex-col">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+         <div>
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Offers Received</h2>
+            <p className="text-slate-500 text-sm">{offers.length} Active Offers</p>
+         </div>
+         <button 
+           onClick={() => setIsAddModalOpen(true)}
+           className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium shadow-md shadow-emerald-200 dark:shadow-none transition-colors flex items-center gap-2"
+         >
+           <Plus size={18} /> Log New Offer
+         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="space-y-4">
-           {offers.map(job => (
-             <div 
-                key={job.id} 
-                onClick={() => setSelectedOfferId(job.id)}
-                className={`p-5 rounded-xl border transition-all cursor-pointer ${
-                  selectedOfferId === job.id 
-                  ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-700 ring-1 ring-indigo-200 dark:ring-indigo-700' 
-                  : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 hover:shadow-md'
-                }`}
-             >
-                <div className="flex justify-between items-start">
-                   <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white text-lg">{job.role}</h3>
-                      <p className="text-slate-600 dark:text-slate-400">{job.company}</p>
-                   </div>
-                   <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold uppercase tracking-wider">
-                      {job.status}
-                   </span>
-                </div>
-                <div className="mt-4 flex items-center justify-between">
-                   <span className="font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-sm">
-                      {job.salary || 'Salary N/A'}
-                   </span>
-                   <ArrowRight size={18} className={`text-slate-400 ${selectedOfferId === job.id ? 'text-indigo-600 dark:text-indigo-400' : ''}`} />
-                </div>
-             </div>
-           ))}
+      <div className="flex flex-col lg:flex-row gap-6 h-full overflow-hidden">
+        
+        {/* Left Column: List */}
+        <div className="w-full lg:w-1/3 flex flex-col gap-4 overflow-hidden">
+           {/* Search */}
+           <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input 
+                 type="text" 
+                 placeholder="Search by company or role..." 
+                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none transition-shadow"
+                 value={searchTerm}
+                 onChange={(e) => setSearchTerm(e.target.value)}
+              />
+           </div>
+
+           {/* Cards Container */}
+           <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+              {filteredOffers.map(job => (
+                 <div 
+                    key={job.id}
+                    onClick={() => setSelectedOfferId(job.id)}
+                    className={`${cardBase} ${selectedOfferId === job.id ? activeCard : inactiveCard}`}
+                 >
+                    <div className="flex justify-between items-start mb-2">
+                       <div className="flex items-center gap-3">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ${selectedOfferId === job.id ? 'bg-emerald-200 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
+                             {job.company.charAt(0)}
+                          </div>
+                          <div>
+                             <h3 className="font-bold text-slate-900 dark:text-white leading-tight">{job.role}</h3>
+                             <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">{job.company}</p>
+                          </div>
+                       </div>
+                       <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400">
+                          {job.status}
+                       </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mt-4 px-1">
+                       <span className="flex items-center gap-1.5"><MapPin size={14} className="text-emerald-500"/> {job.location || 'Remote'}</span>
+                       {job.salary && <span className="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300"><IndianRupee size={14} className="text-emerald-500"/> {job.salary}</span>}
+                    </div>
+                    
+                    <button 
+                       onClick={(e) => handleDelete(e, job.id)}
+                       className="absolute bottom-4 right-4 p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                       <Trash2 size={16} />
+                    </button>
+                 </div>
+              ))}
+           </div>
         </div>
 
-        {/* Details & AI Panel */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6 min-h-[500px]">
-           {selectedOfferId ? (
-             (() => {
-                const job = offers.find(j => j.id === selectedOfferId)!;
-                return (
-                   <div className="space-y-6">
-                      <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                           {job.company} 
-                           {job.status === 'Accepted' && <CheckCircle size={20} className="text-emerald-500" />}
-                        </h3>
-                        <p className="text-slate-500 dark:text-slate-400">{job.role}</p>
-                      </div>
+        {/* Right Column: Details - MAXIMIZED SPACE */}
+        <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
+           {selectedJob ? (
+              <div className="flex-1 flex flex-col h-full overflow-hidden">
+                 
+                 {/* Navigation Bar (Clean, Minimal) */}
+                 <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 px-4">
+                    {/* Tabs */}
+                    <div className="flex gap-1 overflow-x-auto">
+                        <button 
+                            onClick={() => setActiveTab('interview')}
+                            className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                                activeTab === 'interview' 
+                                    ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900' 
+                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <BookOpen size={16} /> 
+                            Interview Prep
+                            {selectedJob.interviewGuide && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>}
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('negotiation')}
+                            className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                                activeTab === 'negotiation' 
+                                    ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900' 
+                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <HandCoins size={16} /> 
+                            Negotiation
+                            {selectedJob.negotiationStrategy && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>}
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('details')}
+                            className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                                activeTab === 'details' 
+                                    ? 'border-slate-400 text-slate-800 dark:text-white bg-white dark:bg-slate-900' 
+                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <FileText size={16} /> Job Details
+                        </button>
+                    </div>
 
-                      {/* AI Action */}
-                      <div className="bg-slate-50 dark:bg-slate-950 rounded-xl p-5 border border-slate-100 dark:border-slate-800">
-                         <div className="flex items-center justify-between mb-4">
-                            <h4 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                               <Sparkles size={18} className="text-purple-600 dark:text-purple-400" />
-                               AI Career Advisor
-                            </h4>
-                            {!advice[job.id] && (
-                               <button 
-                                  onClick={() => handleGenerateAdvice(job.id, job.role, job.company, job.salary)}
-                                  disabled={loading[job.id]}
-                                  className="text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-2"
-                               >
-                                  {loading[job.id] && <Loader2 className="animate-spin" size={14} />}
-                                  {loading[job.id] ? 'Analyzing...' : 'Analyze Offer'}
-                               </button>
+                    {/* Actions */}
+                    <div className="flex items-center pl-4 border-l border-slate-200 dark:border-slate-800 ml-2">
+                        <button onClick={(e) => handleDelete(e, selectedJob.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="Delete Offer">
+                            <Trash2 size={18} />
+                        </button>
+                    </div>
+                 </div>
+
+                 {/* Content Area - Full Height */}
+                 <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-white dark:bg-slate-900 custom-scrollbar">
+                    
+                    {/* Interview Guide Tab */}
+                    {activeTab === 'interview' && (
+                        <div className="animate-fade-in max-w-4xl mx-auto">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Prep Guide: {selectedJob.role}</h2>
+                                    <p className="text-slate-500 dark:text-slate-400 text-sm">AI-generated strategy based on the JD.</p>
+                                </div>
+                                <button 
+                                    onClick={handleGenerateInterview}
+                                    disabled={loading[`int_${selectedJob.id}`]}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium shadow-lg shadow-emerald-200 dark:shadow-none transition-all flex items-center gap-2 disabled:opacity-70 disabled:shadow-none"
+                                >
+                                    {loading[`int_${selectedJob.id}`] ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                                    {loading[`int_${selectedJob.id}`] ? 'Analyzing...' : (selectedJob.interviewGuide ? 'Regenerate Guide' : 'Generate Guide')}
+                                </button>
+                            </div>
+                            
+                            {selectedJob.interviewGuide ? (
+                                <div className="prose prose-emerald max-w-none dark:prose-invert">
+                                    <ReactMarkdown components={MarkdownComponents}>
+                                        {selectedJob.interviewGuide}
+                                    </ReactMarkdown>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50">
+                                    <div className="p-4 bg-white dark:bg-slate-800 rounded-full mb-4 shadow-sm">
+                                        <BookOpen size={40} className="text-emerald-500" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-1">Ready to Prep?</h3>
+                                    <p className="text-sm max-w-xs text-center mb-6">Generate a tailored interview guide covering core competencies and likely questions.</p>
+                                    <button 
+                                        onClick={handleGenerateInterview}
+                                        className="text-emerald-600 font-bold hover:underline"
+                                    >
+                                        Generate Guide Now &rarr;
+                                    </button>
+                                </div>
                             )}
-                         </div>
-                         
-                         {loading[job.id] && (
-                            <div className="text-center py-8 text-purple-600 dark:text-purple-400">
-                               <Loader2 size={32} className="animate-spin mx-auto mb-2" />
-                               <p className="text-sm">Generating negotiation strategy...</p>
-                            </div>
-                         )}
+                        </div>
+                    )}
 
-                         {advice[job.id] && (
-                            <div className="prose prose-sm max-w-none text-slate-700 dark:text-slate-300 animate-fade-in bg-white dark:bg-slate-900 p-4 rounded-lg border border-purple-100 dark:border-purple-900 shadow-sm dark:prose-invert">
-                               <ReactMarkdown>
-                                  {advice[job.id]}
-                               </ReactMarkdown>
+                    {/* Negotiation Tab */}
+                    {activeTab === 'negotiation' && (
+                        <div className="animate-fade-in max-w-4xl mx-auto">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Negotiation Strategy</h2>
+                                    <p className="text-slate-500 dark:text-slate-400 text-sm">Maximize your offer for {selectedJob.company}.</p>
+                                </div>
+                                <button 
+                                    onClick={handleGenerateNegotiation}
+                                    disabled={loading[`neg_${selectedJob.id}`]}
+                                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl font-medium shadow-lg shadow-purple-200 dark:shadow-none transition-all flex items-center gap-2 disabled:opacity-70 disabled:shadow-none"
+                                >
+                                    {loading[`neg_${selectedJob.id}`] ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                                    {loading[`neg_${selectedJob.id}`] ? 'Analyzing...' : (selectedJob.negotiationStrategy ? 'Regenerate Strategy' : 'Create Strategy')}
+                                </button>
                             </div>
-                         )}
+                            
+                            {selectedJob.negotiationStrategy ? (
+                                <div className="prose prose-purple max-w-none dark:prose-invert">
+                                    <ReactMarkdown components={MarkdownComponents}>
+                                        {selectedJob.negotiationStrategy}
+                                    </ReactMarkdown>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-20 text-slate-400 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50">
+                                    <div className="p-4 bg-white dark:bg-slate-800 rounded-full mb-4 shadow-sm">
+                                        <HandCoins size={40} className="text-purple-500" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-1">Negotiate Better</h3>
+                                    <p className="text-sm max-w-xs text-center mb-6">Get a market analysis, leverage points, and a specific script to ask for more.</p>
+                                    <button 
+                                        onClick={handleGenerateNegotiation}
+                                        className="text-purple-600 font-bold hover:underline"
+                                    >
+                                        Create Strategy Now &rarr;
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
-                         {!advice[job.id] && !loading[job.id] && (
-                            <p className="text-sm text-slate-500 dark:text-slate-400">
-                               Click "Analyze Offer" to get a negotiation strategy, questions to ask, and a 90-day success plan using Gemini AI.
-                            </p>
-                         )}
-                      </div>
-                   </div>
-                );
-             })()
+                    {/* Job Details Tab */}
+                    {activeTab === 'details' && (
+                         <div className="animate-fade-in max-w-4xl mx-auto space-y-8">
+                             
+                             {/* Key Info Cards */}
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="bg-slate-50 dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                    <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold uppercase text-xs tracking-wider mb-2">
+                                        <IndianRupee size={14} /> Salary Offer
+                                    </div>
+                                    <div className="text-2xl font-bold text-slate-900 dark:text-white">
+                                        {selectedJob.salary || 'Not specified'}
+                                    </div>
+                                </div>
+                                <div className="bg-slate-50 dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700">
+                                    <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold uppercase text-xs tracking-wider mb-2">
+                                        <User size={14} /> Primary Contact
+                                    </div>
+                                    <div className="text-sm">
+                                        {selectedJob.contacts && selectedJob.contacts.length > 0 ? (
+                                            <div>
+                                                <p className="font-bold text-slate-900 dark:text-white text-lg">{selectedJob.contacts[0].name}</p>
+                                                <div className="flex items-center gap-2 text-slate-500 mt-1">
+                                                    <Mail size={14} /> {selectedJob.contacts[0].email}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-400 italic">No contact info available</span>
+                                        )}
+                                    </div>
+                                </div>
+                             </div>
+
+                             <div>
+                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Job Description</h3>
+                                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
+                                    {selectedJob.description ? (
+                                        <div className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-wrap font-medium">
+                                            {selectedJob.description}
+                                        </div>
+                                    ) : (
+                                        <div className="text-slate-400 italic text-sm text-center py-8">
+                                            No description provided. Add one to get better AI insights.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                 </div>
+              </div>
            ) : (
-             <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 text-center">
-                <AlertCircle size={48} className="mb-4 opacity-50" />
-                <p>Select an offer from the list to view details and AI insights.</p>
-             </div>
+              <div className="flex-1 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 dark:bg-slate-900/50">
+                 <div className="p-4 bg-white dark:bg-slate-800 rounded-full shadow-sm mb-4">
+                    <Sparkles size={32} className="text-emerald-400" />
+                 </div>
+                 <p className="font-medium">Select an offer to view details & strategy</p>
+              </div>
            )}
         </div>
       </div>
+
+      {/* Add Offer Modal */}
+      {isAddModalOpen && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg p-6 animate-fade-in border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+               <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Log New Offer</h3>
+                  <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                     <X size={24} />
+                  </button>
+               </div>
+               
+               <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                      <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Company</label>
+                         <input 
+                            className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" 
+                            placeholder="e.g. Acme Corp" 
+                            value={newOffer.company} 
+                            onChange={e => setNewOffer({...newOffer, company: e.target.value})} 
+                         />
+                      </div>
+                      <div>
+                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Role</label>
+                         <input 
+                            className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" 
+                            placeholder="e.g. Product Designer" 
+                            value={newOffer.role} 
+                            onChange={e => setNewOffer({...newOffer, role: e.target.value})} 
+                         />
+                      </div>
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Salary / Package</label>
+                     <input 
+                        className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" 
+                        placeholder="e.g. ₹12,00,000 + Equity" 
+                        value={newOffer.salary} 
+                        onChange={e => setNewOffer({...newOffer, salary: e.target.value})} 
+                     />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Location</label>
+                     <input 
+                        className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" 
+                        placeholder="e.g. Remote" 
+                        value={newOffer.location} 
+                        onChange={e => setNewOffer({...newOffer, location: e.target.value})} 
+                     />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Job Description</label>
+                     <textarea 
+                        className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 min-h-[100px] resize-y" 
+                        placeholder="Paste the JD here to generate better AI advice..." 
+                        value={newOffer.description} 
+                        onChange={e => setNewOffer({...newOffer, description: e.target.value})} 
+                     />
+                  </div>
+               </div>
+
+               <div className="flex justify-end gap-3 mt-8">
+                  <button 
+                     onClick={() => setIsAddModalOpen(false)} 
+                     className="px-4 py-2 text-slate-500 hover:text-slate-700 font-medium"
+                  >
+                     Cancel
+                  </button>
+                  <button 
+                     onClick={handleSaveNewOffer} 
+                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-bold shadow-lg shadow-emerald-200 dark:shadow-none transition-all"
+                  >
+                     Save Offer
+                  </button>
+               </div>
+            </div>
+         </div>
+      )}
     </div>
   );
 };

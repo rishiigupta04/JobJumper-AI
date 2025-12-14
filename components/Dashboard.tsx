@@ -23,15 +23,18 @@ const StatCard = ({ title, value, icon: Icon, colorClass, gradient }: any) => (
 const Dashboard: React.FC = () => {
   const { jobs, stats } = useJobContext();
 
-  // Prepare chart data (Applications over last 30 days)
+  // Prepare chart data (Applications over last 7 days)
   const chartData = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
     const dateStr = d.toISOString().split('T')[0];
-    const count = jobs.filter(j => j.dateApplied === dateStr).length;
+    const dayJobs = jobs.filter(j => j.dateApplied === dateStr);
+    
     return {
       name: d.toLocaleDateString('en-US', { weekday: 'short' }),
-      applications: count
+      Applications: dayJobs.length,
+      Interviews: dayJobs.filter(j => j.status === 'Interview').length,
+      Offers: dayJobs.filter(j => j.status === 'Offer' || j.status === 'Accepted').length
     };
   });
 
@@ -73,7 +76,7 @@ const Dashboard: React.FC = () => {
         <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
           <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
             <TrendingUp size={20} className="text-indigo-600 dark:text-indigo-400" />
-            Application Activity (Last 7 Days)
+            Activity Overview (Last 7 Days)
           </h2>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -83,10 +86,18 @@ const Dashboard: React.FC = () => {
                     <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
                     <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                   </linearGradient>
+                  <linearGradient id="colorInterviews" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorOffers" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" strokeOpacity={0.5} />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} allowDecimals={false} />
                 <Tooltip 
                   contentStyle={{ 
                     borderRadius: '12px', 
@@ -95,15 +106,31 @@ const Dashboard: React.FC = () => {
                     backgroundColor: '#1e293b',
                     color: '#f8fafc'
                   }}
-                  itemStyle={{ color: '#f8fafc' }}
+                  itemStyle={{ paddingBottom: '2px' }}
                 />
                 <Area 
                   type="monotone" 
-                  dataKey="applications" 
+                  dataKey="Applications" 
                   stroke="#6366f1" 
-                  strokeWidth={3}
+                  strokeWidth={2}
                   fillOpacity={1} 
                   fill="url(#colorApps)" 
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="Interviews" 
+                  stroke="#8b5cf6" 
+                  strokeWidth={2}
+                  fillOpacity={1} 
+                  fill="url(#colorInterviews)" 
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="Offers" 
+                  stroke="#10b981" 
+                  strokeWidth={2}
+                  fillOpacity={1} 
+                  fill="url(#colorOffers)" 
                 />
               </AreaChart>
             </ResponsiveContainer>

@@ -11,10 +11,11 @@
   "dependencies": {
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "@google/genai": "^1.33.0",
-    "recharts": "^3.5.1",
-    "react-markdown": "^10.1.0",
-    "lucide-react": "^0.561.0"
+    "@google/genai": "1.33.0",
+    "recharts": "2.12.7",
+    "react-markdown": "9.0.1",
+    "lucide-react": "0.344.0",
+    "@supabase/supabase-js": "2.39.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
