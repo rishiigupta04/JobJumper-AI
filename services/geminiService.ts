@@ -1116,11 +1116,6 @@ export interface ResearchResult {
   };
   compensation: {
     salaryRange: string;
-    breakdown: {
-        fresher: string;
-        mid: string;
-        senior: string;
-    };
     comparison: string;
     benefits: string[];
   };
@@ -1170,11 +1165,6 @@ export const validateResearchResult = (data: any): ResearchResult => {
     },
     compensation: {
       salaryRange: data?.compensation?.salaryRange || "Not available",
-      breakdown: {
-          fresher: data?.compensation?.breakdown?.fresher || "N/A",
-          mid: data?.compensation?.breakdown?.mid || "N/A",
-          senior: data?.compensation?.breakdown?.senior || "N/A"
-      },
       comparison: data?.compensation?.comparison || "",
       benefits: data?.compensation?.benefits || []
     },
@@ -1222,9 +1212,8 @@ export const runAgentResearch = async (company: string, role: string): Promise<R
     1. Use Google Search to find real-time data.
     2. Specifically look for **Glassdoor reviews for ${company} in India** (or global if India not available).
     3. Look for **Reddit threads** on r/developersIndia, r/csMajors, or r/jobs about ${company} work culture.
-    4. Find **salary data** on Levels.fyi, AmbitionBox, or Glassdoor for India (INR). 
-    5. SPECIFICALLY look for data for Freshers (0-1 yoe), Mid-level (2-3 yoe), and Senior roles.
-    6. Look for **Interview Questions, Candidate Experiences, and Employee Reviews**.
+    4. Find **salary data** on Levels.fyi, AmbitionBox, or Glassdoor for India (INR).
+    5. Look for **Interview Questions, Candidate Experiences, and Employee Reviews** specifically. Prioritize this over general news.
 
     Conduct systematic research and provide findings adhering to the JSON structure below.
     
@@ -1236,16 +1225,7 @@ export const runAgentResearch = async (company: string, role: string): Promise<R
       "companyIntelligence": { "overview": "string", "sizeAndStage": "string", "competitors": ["string"], "financialHealth": "string" },
       "marketAnalysis": { "recentNews": ["string"], "marketPosition": "string" },
       "culture": { "workEnvironment": "string", "engineeringCulture": "string" },
-      "compensation": { 
-          "salaryRange": "string (Overall estimated range)", 
-          "breakdown": {
-              "fresher": "string (e.g. ₹12L - ₹18L)",
-              "mid": "string (e.g. ₹20L - ₹35L)",
-              "senior": "string (e.g. ₹40L+)"
-          },
-          "comparison": "string", 
-          "benefits": ["string"] 
-      },
+      "compensation": { "salaryRange": "string", "comparison": "string", "benefits": ["string"] },
       "hiring": { "process": ["string"], "applicationStrategy": "string" },
       "risks": { "level": "Low" | "Medium" | "High", "concerns": ["string"] },
       "strategy": { "outreach": "string", "differentiators": ["string"] },
