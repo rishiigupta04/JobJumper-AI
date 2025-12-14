@@ -112,6 +112,7 @@ const Chatur: React.FC = () => {
       currentDate: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
     };
 
+    // Use the native Gemini service
     const responseText = await chatWithChatur(chatMessages, userMsg.text, contextData);
 
     const botMsg: ChatMessage = {
@@ -172,7 +173,7 @@ const Chatur: React.FC = () => {
                     <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         Chatur <span className="px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[10px] font-extrabold uppercase tracking-wider">AI Agent</span>
                     </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Context-aware career guidance</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Powered by Gemini 2.0</p>
                 </div>
             </div>
             <button 
