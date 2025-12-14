@@ -929,16 +929,38 @@ const AgentResearch: React.FC<AgentResearchProps> = ({ researchState, setResearc
                          
                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             <div className="lg:col-span-2">
-                               <span className="text-emerald-400 text-sm font-bold uppercase tracking-wider block mb-2">Estimated Total Compensation</span>
-                               <p className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2">{report.compensation.salaryRange}</p>
-                               <p className="text-slate-400 text-sm">{report.compensation.comparison}</p>
+                               <span className="text-emerald-400 text-xs font-bold uppercase tracking-wider block mb-4">Market Breakdown</span>
+                               
+                               {report.compensation.breakdown ? (
+                                   <div className="grid grid-cols-3 gap-4 mb-4">
+                                      <div className="bg-slate-950/50 p-4 rounded-xl border border-emerald-900/30">
+                                          <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Fresher (0-1y)</p>
+                                          <p className="text-sm font-bold text-white truncate" title={report.compensation.breakdown.fresher}>{report.compensation.breakdown.fresher}</p>
+                                      </div>
+                                      <div className="bg-slate-950/50 p-4 rounded-xl border border-emerald-500/30 relative overflow-hidden shadow-lg shadow-emerald-900/20">
+                                           <div className="absolute top-0 right-0 w-6 h-6 bg-emerald-500/20 rounded-bl-xl"></div>
+                                          <p className="text-[10px] text-emerald-400 uppercase font-bold mb-1">Mid (2-3y)</p>
+                                          <p className="text-sm font-bold text-white truncate" title={report.compensation.breakdown.mid}>{report.compensation.breakdown.mid}</p>
+                                      </div>
+                                      <div className="bg-slate-950/50 p-4 rounded-xl border border-emerald-900/30">
+                                          <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Senior</p>
+                                          <p className="text-sm font-bold text-white truncate" title={report.compensation.breakdown.senior}>{report.compensation.breakdown.senior}</p>
+                                      </div>
+                                   </div>
+                               ) : (
+                                   <div className="mb-4">
+                                      <p className="text-2xl font-black text-white tracking-tight mb-1">{report.compensation.salaryRange}</p>
+                                   </div>
+                               )}
+
+                               <p className="text-slate-400 text-xs">{report.compensation.comparison}</p>
                             </div>
                             <div className="bg-slate-950/50 rounded-xl p-5 border border-slate-800/50 h-fit">
                                <span className="text-slate-500 text-xs font-bold uppercase tracking-wider block mb-3">Benefits & Perks</span>
                                <div className="flex flex-wrap gap-3">
                                   {report.compensation.benefits.map((b, i) => (
-                                     <span key={i} className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-300 rounded-lg text-sm border border-emerald-500/20">
-                                        <Check size={14} /> {b}
+                                     <span key={i} className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-300 rounded-lg text-xs border border-emerald-500/20">
+                                        <Check size={12} /> {b}
                                      </span>
                                   ))}
                                </div>
