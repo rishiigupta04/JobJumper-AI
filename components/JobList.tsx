@@ -102,8 +102,8 @@ const JobList: React.FC = () => {
       updateJob(editingJob.id, formData);
     } else {
       addJob({
-        id: generateId(),
         ...formData as Job,
+        id: generateId(),
         dateApplied: formData.dateApplied || new Date().toISOString().split('T')[0],
         attachments: formData.attachments || [],
         checklist: formData.checklist || [],
