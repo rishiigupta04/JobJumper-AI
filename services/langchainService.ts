@@ -4,11 +4,10 @@ import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { ChatMessage } from "../types";
 
+// Access process.env.API_KEY directly so Vite can replace it at build time.
+// Do not wrap in 'typeof process' checks as they fail in the browser.
 const getApiKey = () => {
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env.API_KEY || '';
-  }
-  return '';
+  return process.env.API_KEY || '';
 };
 
 // Initialize the custom model

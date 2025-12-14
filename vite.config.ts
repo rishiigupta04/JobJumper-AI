@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
       'process.env.SUPABASE_URL': JSON.stringify(env.SUPABASE_URL),
       'process.env.SUPABASE_ANON_KEY': JSON.stringify(env.SUPABASE_ANON_KEY),
       // Fix for some libraries that check process.env
-      'process.env': {} 
+      'process.env': {}
     },
     css: {
       postcss: './postcss.config.js',

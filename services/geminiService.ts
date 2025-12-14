@@ -1,12 +1,10 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Resume, ChatMessage } from "../types";
 
-// Safely access process.env to prevent crashes in browser environments
+// Access process.env.API_KEY directly so Vite can replace it at build time.
+// Do not wrap in 'typeof process' checks as they fail in the browser.
 const getApiKey = () => {
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env.API_KEY || '';
-  }
-  return '';
+  return process.env.API_KEY || '';
 };
 
 // Helper to extract clean base64 and mimeType
