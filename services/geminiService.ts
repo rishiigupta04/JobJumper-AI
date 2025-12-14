@@ -17,9 +17,10 @@ const parseDataUrl = (dataUrl: string) => {
 };
 
 // Helper to truncate long strings to prevent excessive token usage
+// TIGHTENED LIMITS for Flash model
 const truncateString = (str: string, maxLength: number) => {
   if (!str) return "";
-  return str.length > maxLength ? str.substring(0, maxLength) + "..." : str;
+  return str.length > maxLength ? str.substring(0, maxLength) + "...(truncated)" : str;
 };
 
 // Helper: Clean response but PRESERVE bold markdown (**) for highlighting
@@ -97,7 +98,7 @@ export const scoreResume = async (resume: Resume, jobDescription: string): Promi
     Rigorously score the provided Resume against the Job Description (JD).
 
     Job Description:
-    "${jobDescription.substring(0, 3000)}"
+    "${truncateString(jobDescription, 2000)}"
 
     Resume:
     ${JSON.stringify(resume)}
@@ -156,7 +157,7 @@ export const generateCoverLetter = async (
   try {
     const prompt = `Write a passionate and professional cover letter for the role of ${jobRole} at ${company}. 
     My key skills are: ${userSkills}. 
-    ${jobDescription ? `Here is the job description for context: ${jobDescription}` : ''}
+    ${jobDescription ? `Here is the job description for context: ${truncateString(jobDescription, 1500)}` : ''}
     Keep it concise (under 300 words), engaging, and persuasive. Format it ready to copy-paste.
     Return ONLY the cover letter text. Do not include headers like "Subject:" or placeholders unless necessary.`;
 
@@ -186,7 +187,7 @@ export const generateInterviewGuide = async (
       Act as a world-class technical career coach. Create a STRATEGIC INTERVIEW PREP GUIDE for the role of ${jobRole} at ${company}.
       
       Context from Job Description:
-      "${description ? description.substring(0, 2000) : 'No description provided.'}"
+      "${description ? truncateString(description, 2000) : 'No description provided.'}"
 
       Produce the output in clean, structured Markdown. Use standard headings (##, ###) and lists.
       
@@ -246,7 +247,7 @@ export const generateNegotiationStrategy = async (
       Salary/Package offered: ${salary}
       
       Job Context:
-      "${description ? description.substring(0, 1000) : 'No description provided.'}"
+      "${description ? truncateString(description, 1000) : 'No description provided.'}"
       
       Provide a strategic plan in Markdown. Use clear headings.
 
@@ -302,7 +303,7 @@ export const enhanceResumeText = async (
       ${specificInstruction}
       
       Original Text:
-      "${truncateString(text, 2000)}"
+      "${truncateString(text, 1000)}"
       
       STRICT OUTPUT RULES:
       1. Return ONLY the rewritten text. 
@@ -329,16 +330,16 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
   const ai = new GoogleGenAI({ apiKey });
 
   try {
-    // Construct a safe, truncated version of the resume to send to the AI
-    // We only include fields that are relevant for the rewrite logic to save tokens
+    // Construct a safe, HEAVILY truncated version of the resume to send to the AI
+    // Gemini Flash has lower output limits, so we must reduce input complexity
     const cleanResume = {
         fullName: currentResume.fullName || "",
         email: currentResume.email || "",
         phone: currentResume.phone || "",
         linkedin: currentResume.linkedin || "",
         location: currentResume.location || "",
-        summary: truncateString(currentResume.summary || "", 1500),
-        skills: truncateString(currentResume.skills || "", 1000),
+        summary: truncateString(currentResume.summary || "", 800),
+        skills: truncateString(currentResume.skills || "", 800),
         jobTitle: currentResume.jobTitle || "",
         experience: (currentResume.experience || []).map(e => ({
             id: e.id,
@@ -346,14 +347,14 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
             company: e.company,
             startDate: e.startDate,
             endDate: e.endDate,
-            description: truncateString(e.description || "", 1500)
+            description: truncateString(e.description || "", 800) // Reduced from 1500
         })),
         projects: (currentResume.projects || []).map(p => ({
             id: p.id,
             name: p.name,
             technologies: p.technologies,
             link: p.link,
-            description: truncateString(p.description || "", 1000)
+            description: truncateString(p.description || "", 500) // Reduced from 1000
         })),
         education: (currentResume.education || []).map(e => ({
             id: e.id,
@@ -435,14 +436,15 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
       }
     };
 
-    // Use Gemini 3 Pro Preview for large context/complex reasoning tasks to prevent cutoff
+    // Switched back to Gemini 2.5 Flash as requested.
+    // Lower temperature helps ensure the model focuses on completing the JSON rather than being creative.
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-2.5-flash',
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         responseMimeType: 'application/json',
         responseSchema: schema,
-        temperature: 0.3, // Low temperature for deterministic JSON generation
+        temperature: 0.3,
       }
     });
 
@@ -451,16 +453,18 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
 
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     
-    // Safety check for truncated JSON
-    if (!cleanText.endsWith('}')) {
-       throw new Error("Resume too long. AI response was truncated. Try shortening your descriptions slightly.");
+    // Robust Error Handling for Truncated JSON
+    try {
+        const parsed = JSON.parse(cleanText);
+        // Clean text and normalize structure (e.g. array descriptions to string)
+        const cleaned = traverseAndClean(parsed);
+        return normalizeResumeJSON(cleaned);
+    } catch (parseError) {
+        console.error("JSON Parse Error (likely truncation):", parseError);
+        console.log("Raw Text was:", cleanText);
+        // Throw a specific error that the UI can catch
+        throw new Error("The resume is too long for the AI to process in one go. Please try polishing individual sections instead.");
     }
-
-    const parsed = JSON.parse(cleanText);
-
-    // Clean text and normalize structure (e.g. array descriptions to string)
-    const cleaned = traverseAndClean(parsed);
-    return normalizeResumeJSON(cleaned);
 
   } catch (error) {
     console.error("Gemini Full Enhancement Error:", error);
@@ -480,8 +484,8 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
         phone: currentResume.phone || "",
         linkedin: currentResume.linkedin || "",
         location: currentResume.location || "",
-        summary: truncateString(currentResume.summary || "", 1500),
-        skills: truncateString(currentResume.skills || "", 1000),
+        summary: truncateString(currentResume.summary || "", 800),
+        skills: truncateString(currentResume.skills || "", 800),
         jobTitle: currentResume.jobTitle || "",
         experience: (currentResume.experience || []).map(e => ({
             id: e.id,
@@ -489,14 +493,14 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
             company: e.company,
             startDate: e.startDate,
             endDate: e.endDate,
-            description: truncateString(e.description || "", 1500)
+            description: truncateString(e.description || "", 800)
         })),
         projects: (currentResume.projects || []).map(p => ({
             id: p.id,
             name: p.name,
             technologies: p.technologies,
             link: p.link,
-            description: truncateString(p.description || "", 1000)
+            description: truncateString(p.description || "", 500)
         })),
         education: (currentResume.education || []).map(e => ({
             id: e.id,
@@ -512,7 +516,7 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
     Tailor this Resume JSON to match the provided Job Description (JD).
     
     Job Description:
-    "${truncateString(jobDescription, 4000)}"
+    "${truncateString(jobDescription, 3000)}"
 
     Instructions:
     1. **Analyze JD**: Identify 5-7 critical keywords from the JD.
@@ -581,9 +585,9 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
       }
     };
 
-    // Use Gemini 3 Pro Preview
+    // Switched back to Gemini 2.5 Flash
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-2.5-flash',
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         responseMimeType: 'application/json',
@@ -597,16 +601,17 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
 
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     
-    // Safety check for truncated JSON
-    if (!cleanText.endsWith('}')) {
-       throw new Error("Tailoring response was truncated. JD or Resume might be too long.");
+    // Robust Error Handling for Truncated JSON
+    try {
+        const parsed = JSON.parse(cleanText);
+        // Clean text and normalize structure
+        const cleaned = traverseAndClean(parsed);
+        return normalizeResumeJSON(cleaned);
+    } catch (parseError) {
+        console.error("JSON Parse Error (likely truncation):", parseError);
+        throw new Error("The tailored resume was too large to process. Try reducing the length of your resume or JD.");
     }
 
-    const parsed = JSON.parse(cleanText);
-
-    // Clean text and normalize structure
-    const cleaned = traverseAndClean(parsed);
-    return normalizeResumeJSON(cleaned);
   } catch (error) {
     console.error("Gemini Tailor Resume Error:", error);
     throw error;
