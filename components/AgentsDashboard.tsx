@@ -21,10 +21,62 @@ interface AgentsDashboardProps {
 
 type AgentType = 'analyzer' | 'prep' | 'docs' | 'research';
 
+// Define Research State Interface for hoisting
+interface ResearchState {
+  company: string;
+  role: string;
+  loading: boolean;
+  report: ResearchResult | null;
+  rawMarkdown: string | null;
+}
+
 const AgentsDashboard: React.FC<AgentsDashboardProps> = ({ setView }) => {
   const [activeAgent, setActiveAgent] = useState<AgentType>('analyzer');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { resume } = useJobContext();
+  const { addResearchReport } = useJobContext();
+
+  // Hoisted Research State to persist across tab switches
+  const [researchState, setResearchState] = useState<ResearchState>({
+    company: '',
+    role: '',
+    loading: false,
+    report: null,
+    rawMarkdown: null
+  });
+
+  // Hoisted Research Handler
+  const handleRunResearch = async () => {
+    if (!researchState.company || !researchState.role) return;
+    
+    // Capture current values to use in async closure
+    const currentCompany = researchState.company;
+    const currentRole = researchState.role;
+
+    setResearchState(prev => ({ ...prev, loading: true, report: null, rawMarkdown: null }));
+    
+    try {
+      const data = await runAgentResearch(currentCompany, currentRole);
+      
+      const newReport: ResearchReport = {
+          id: crypto.randomUUID(),
+          company: currentCompany,
+          role: currentRole,
+          date: new Date().toISOString(),
+          content: JSON.stringify(data)
+      };
+      
+      // Auto-display and stop loading
+      setResearchState(prev => ({ ...prev, report: data, loading: false }));
+      
+      // Persist to history
+      addResearchReport(newReport);
+
+    } catch (e) {
+      console.error(e);
+      setResearchState(prev => ({ ...prev, loading: false }));
+      alert("Research failed. Please try again.");
+    }
+  };
 
   // Sidebar Items
   const agents = [
@@ -39,7 +91,12 @@ const AgentsDashboard: React.FC<AgentsDashboardProps> = ({ setView }) => {
       case 'analyzer': return <AgentAnalyzer />;
       case 'prep': return <AgentPrep />;
       case 'docs': return <AgentDocs />;
-      case 'research': return <AgentResearch />;
+      case 'research': 
+        return <AgentResearch 
+            researchState={researchState} 
+            setResearchState={setResearchState} 
+            onRunResearch={handleRunResearch}
+        />;
       default: return <AgentAnalyzer />;
     }
   };
@@ -652,63 +709,45 @@ const AgentDocs = () => {
 
 // --- AGENT 4: RESEARCH ---
 
-const AgentResearch = () => {
-  const { researchHistory, addResearchReport, deleteResearchReport } = useJobContext();
-  const [company, setCompany] = useState('');
-  const [role, setRole] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [report, setReport] = useState<ResearchResult | null>(null);
-  const [rawMarkdown, setRawMarkdown] = useState<string | null>(null);
+interface AgentResearchProps {
+    researchState: ResearchState;
+    setResearchState: React.Dispatch<React.SetStateAction<ResearchState>>;
+    onRunResearch: () => void;
+}
 
-  const handleResearch = async () => {
-    if (!company || !role) return;
-    setLoading(true);
-    setReport(null);
-    setRawMarkdown(null);
-    
-    try {
-      const data = await runAgentResearch(company, role);
-      
-      // Store result stringified in history (persistence layer uses string)
-      const newReport: ResearchReport = {
-          id: crypto.randomUUID(),
-          company,
-          role,
-          date: new Date().toISOString(),
-          content: JSON.stringify(data)
-      };
-      
-      setReport(data);
-      addResearchReport(newReport);
-
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+const AgentResearch: React.FC<AgentResearchProps> = ({ researchState, setResearchState, onRunResearch }) => {
+  const { researchHistory, deleteResearchReport } = useJobContext();
+  const { company, role, loading, report, rawMarkdown } = researchState;
 
   const handleSelectReport = (item: ResearchReport) => {
-      setCompany(item.company);
-      setRole(item.role);
-      
       try {
           const parsed = JSON.parse(item.content);
-          // Use validator to prevent undefined errors from legacy data
-          setReport(validateResearchResult(parsed));
-          setRawMarkdown(null);
+          setResearchState(prev => ({
+              ...prev,
+              company: item.company,
+              role: item.role,
+              report: validateResearchResult(parsed),
+              rawMarkdown: null
+          }));
       } catch (e) {
-          // Fallback for legacy markdown reports
-          setReport(null);
-          setRawMarkdown(item.content);
+          setResearchState(prev => ({
+              ...prev,
+              company: item.company,
+              role: item.role,
+              report: null,
+              rawMarkdown: item.content
+          }));
       }
   };
 
   const clearForm = () => {
-      setCompany('');
-      setRole('');
-      setReport(null);
-      setRawMarkdown(null);
+      setResearchState(prev => ({
+          ...prev,
+          company: '',
+          role: '',
+          report: null,
+          rawMarkdown: null
+      }));
   }
 
   // Render Metrics Helper
@@ -754,14 +793,24 @@ const AgentResearch = () => {
                     <div className="w-full space-y-4 text-left">
                        <div>
                           <label className="block text-xs font-bold text-indigo-400 uppercase mb-2 ml-1">Target Company</label>
-                          <input className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white focus:ring-2 focus:ring-indigo-500 outline-none" value={company} onChange={e => setCompany(e.target.value)} placeholder="e.g. Swiggy" />
+                          <input 
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white focus:ring-2 focus:ring-indigo-500 outline-none" 
+                            value={company} 
+                            onChange={e => setResearchState(prev => ({ ...prev, company: e.target.value }))} 
+                            placeholder="e.g. Swiggy" 
+                          />
                        </div>
                        <div>
                           <label className="block text-xs font-bold text-indigo-400 uppercase mb-2 ml-1">Role Title</label>
-                          <input className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white focus:ring-2 focus:ring-indigo-500 outline-none" value={role} onChange={e => setRole(e.target.value)} placeholder="e.g. SDE 2" />
+                          <input 
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white focus:ring-2 focus:ring-indigo-500 outline-none" 
+                            value={role} 
+                            onChange={e => setResearchState(prev => ({ ...prev, role: e.target.value }))} 
+                            placeholder="e.g. SDE 2" 
+                          />
                        </div>
                        <button 
-                          onClick={handleResearch}
+                          onClick={onRunResearch}
                           disabled={loading || !company || !role}
                           className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-4 shadow-lg shadow-indigo-900/20"
                        >
@@ -881,7 +930,7 @@ const AgentResearch = () => {
                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             <div className="lg:col-span-2">
                                <span className="text-emerald-400 text-sm font-bold uppercase tracking-wider block mb-2">Estimated Total Compensation</span>
-                               <p className="text-4xl md:text-5xl font-black text-white tracking-tight mb-2">{report.compensation.salaryRange}</p>
+                               <p className="text-2xl md:text-3xl font-black text-white tracking-tight mb-2">{report.compensation.salaryRange}</p>
                                <p className="text-slate-400 text-sm">{report.compensation.comparison}</p>
                             </div>
                             <div className="bg-slate-950/50 rounded-xl p-5 border border-slate-800/50 h-fit">
@@ -1125,7 +1174,7 @@ const AgentResearch = () => {
                               <span className="flex items-center gap-1"><Clock size={10} /> {new Date(item.date).toLocaleDateString()}</span>
                           </div>
                           <button 
-                             onClick={(e) => { e.stopPropagation(); deleteResearchReport(item.id); if(report?.companyName === item.company) setReport(null); }}
+                             onClick={(e) => { e.stopPropagation(); deleteResearchReport(item.id); if(report?.companyName === item.company) setResearchState(prev => ({...prev, report: null, rawMarkdown: null})); }}
                              className="absolute top-3 right-3 p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-900/20 rounded-md opacity-0 group-hover:opacity-100 transition-all"
                           >
                              <Trash2 size={14} />
