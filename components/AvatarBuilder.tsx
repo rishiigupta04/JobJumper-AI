@@ -85,9 +85,9 @@ const AvatarBuilder: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-140px)] flex flex-col lg:flex-row gap-6">
+    <div className="h-full lg:h-[calc(100vh-140px)] flex flex-col lg:flex-row gap-6 pb-20 lg:pb-0">
       {/* Left Panel: Controls */}
-      <div className="flex-1 bg-white dark:bg-slate-900 p-6 lg:p-8 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-y-auto">
+      <div className="flex-1 bg-white dark:bg-slate-900 p-6 lg:p-8 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 lg:overflow-y-auto">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl text-indigo-600 dark:text-indigo-400">
             <Wand2 size={24} />

@@ -173,7 +173,7 @@ const Chatur: React.FC = () => {
                     <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         Chatur <span className="px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[10px] font-extrabold uppercase tracking-wider">AI Agent</span>
                     </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Powered by Gemini 2.0</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Powered by Gen AI</p>
                 </div>
             </div>
             <button 

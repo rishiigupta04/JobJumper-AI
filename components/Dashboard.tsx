@@ -25,18 +25,6 @@ const StatCard = ({ title, value, icon: Icon, colorClass, gradient }: any) => (
   </div>
 );
 
-// We need to access setView to switch to agents mode. 
-// Since Dashboard is rendered by App.tsx -> MainContent -> renderView, we need to pass setView down or access it via context if we moved view state to context.
-// Ideally, ViewState should be in context, but currently it's in App.tsx. 
-// For now, I'll rely on the parent passing props or refactoring.
-// However, the Sidebar component receives setView. We can modify MainContent to pass setView to Dashboard.
-// To avoid breaking App.tsx too much, let's assume Sidebar usage style: Dashboard({ setView })
-
-// Wait, MainContent in App.tsx doesn't pass props to Dashboard. 
-// I will update App.tsx to pass setView to Dashboard, or move ViewState to JobContext.
-// Moving ViewState to JobContext is cleaner but requires large refactor.
-// Easier fix: Pass setView from MainContent to Dashboard.
-
 const Dashboard: React.FC<{ setView?: (view: ViewState) => void }> = ({ setView }) => {
   const { jobs, stats } = useJobContext();
 
@@ -63,10 +51,10 @@ const Dashboard: React.FC<{ setView?: (view: ViewState) => void }> = ({ setView 
         onClick={() => setView && setView('agents')}
         className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 to-indigo-900 p-8 shadow-xl shadow-indigo-900/20 border border-indigo-500/30 cursor-pointer group transition-transform hover:scale-[1.01]"
       >
-        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity text-white">
-            <Bot size={120} />
+        <div className="absolute -bottom-10 right-24 md:right-48 opacity-10 group-hover:opacity-20 transition-opacity text-white pointer-events-none transform rotate-12">
+            <Bot size={180} />
         </div>
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
         
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div>
@@ -78,7 +66,7 @@ const Dashboard: React.FC<{ setView?: (view: ViewState) => void }> = ({ setView 
                     Deploy autonomous AI agents to analyze job descriptions, conduct deep company research, generate interview prep kits, and craft tailored documents.
                 </p>
             </div>
-            <button className="px-6 py-3 bg-white text-indigo-900 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-50 transition-colors shadow-lg">
+            <button className="px-6 py-3 bg-white text-indigo-900 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-50 transition-colors shadow-lg shrink-0">
                 Launch Agents <ArrowRight size={18} />
             </button>
         </div>

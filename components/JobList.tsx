@@ -248,12 +248,12 @@ const JobList: React.FC = () => {
   const labelClass = "block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white">My Applications</h2>
         <button 
           onClick={() => handleOpenModal()}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 shadow-lg shadow-indigo-200 dark:shadow-none transition-all"
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 shadow-lg shadow-indigo-200 dark:shadow-none transition-all w-full md:w-auto justify-center"
         >
           <Plus size={18} />
           Add Application
@@ -318,7 +318,7 @@ const JobList: React.FC = () => {
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100 dark:border-slate-800 justify-end md:justify-start">
               <button 
                 onClick={() => handleOpenModal(job)}
                 className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
@@ -342,15 +342,15 @@ const JobList: React.FC = () => {
         )}
       </div>
 
-      {/* Expanded Modal */}
+      {/* Expanded Modal - Full screen on mobile */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-100 dark:border-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-none md:rounded-2xl shadow-2xl w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] overflow-hidden flex flex-col border-0 md:border border-slate-100 dark:border-slate-800">
             
             {/* Modal Header */}
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
+            <div className="p-4 md:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
               <div>
-                <h3 className="text-xl font-bold text-slate-800 dark:text-white">
+                <h3 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">
                   {editingJob ? 'Manage Application' : 'New Application'}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{formData.company || 'Untitled Company'}</p>
@@ -360,8 +360,8 @@ const JobList: React.FC = () => {
               </button>
             </div>
 
-            {/* Tabs */}
-            <div className="flex border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-6 overflow-x-auto">
+            {/* Tabs - Scrollable on mobile */}
+            <div className="flex border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-2 md:px-6 overflow-x-auto no-scrollbar">
               {[
                 { id: 'info', label: 'Overview', icon: Briefcase },
                 { id: 'people', label: 'People', icon: Users },
@@ -376,7 +376,7 @@ const JobList: React.FC = () => {
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
                     className={`
-                      flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
+                      flex items-center gap-2 px-3 md:px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0
                       ${isActive 
                         ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' 
                         : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
@@ -391,7 +391,7 @@ const JobList: React.FC = () => {
             </div>
             
             {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 dark:bg-slate-900/50 pb-20 md:pb-6">
               
               {/* Tab: Overview */}
               {activeTab === 'info' && (
@@ -569,18 +569,18 @@ const JobList: React.FC = () => {
                                     
                                     <div className="space-y-2 mb-3">
                                         {contact.history && contact.history.map(item => (
-                                            <div key={item.id} className="text-xs flex gap-2">
+                                            <div key={item.id} className="text-xs flex flex-col sm:flex-row gap-1 sm:gap-2">
                                                 <span className="text-slate-400 min-w-[70px]">{item.date}</span>
                                                 <span className="font-semibold text-slate-700 dark:text-slate-300 min-w-[50px]">{item.type}</span>
-                                                <span className="text-slate-600 dark:text-slate-400">{item.notes}</span>
+                                                <span className="text-slate-600 dark:text-slate-400 break-words">{item.notes}</span>
                                             </div>
                                         ))}
                                     </div>
 
                                     {/* Add Interaction Input */}
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-col sm:flex-row gap-2">
                                         <select 
-                                            className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs outline-none"
+                                            className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 sm:py-1 text-xs outline-none"
                                             onChange={(e) => setNewInteraction(prev => ({ ...prev, contactId: contact.id, text: prev?.text || '', type: e.target.value as any }))}
                                             value={newInteraction?.contactId === contact.id ? newInteraction.type : 'Email'}
                                         >
@@ -589,19 +589,21 @@ const JobList: React.FC = () => {
                                             <option value="LinkedIn">LinkedIn</option>
                                             <option value="Meeting">Meeting</option>
                                         </select>
-                                        <input 
-                                            className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1 text-xs bg-white dark:bg-slate-950"
-                                            placeholder="Log a note (e.g. Sent follow-up)"
-                                            value={newInteraction?.contactId === contact.id ? newInteraction.text : ''}
-                                            onChange={(e) => setNewInteraction({ contactId: contact.id, text: e.target.value, type: newInteraction?.type || 'Email' })}
-                                            onKeyDown={(e) => e.key === 'Enter' && addInteraction(contact.id)}
-                                        />
-                                        <button 
-                                            onClick={() => addInteraction(contact.id)}
-                                            className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-1.5 rounded-lg"
-                                        >
-                                            <Plus size={14} />
-                                        </button>
+                                        <div className="flex-1 flex gap-2">
+                                            <input 
+                                                className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 sm:py-1 text-xs bg-white dark:bg-slate-950"
+                                                placeholder="Log a note..."
+                                                value={newInteraction?.contactId === contact.id ? newInteraction.text : ''}
+                                                onChange={(e) => setNewInteraction({ contactId: contact.id, text: e.target.value, type: newInteraction?.type || 'Email' })}
+                                                onKeyDown={(e) => e.key === 'Enter' && addInteraction(contact.id)}
+                                            />
+                                            <button 
+                                                onClick={() => addInteraction(contact.id)}
+                                                className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-2 sm:p-1.5 rounded-lg"
+                                            >
+                                                <Plus size={14} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -762,8 +764,8 @@ const JobList: React.FC = () => {
                             <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
                               <FileText size={16} />
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{doc.name}</p>
+                            <div className="overflow-hidden">
+                              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{doc.name}</p>
                               <p className="text-xs text-slate-500">{doc.type} • {doc.dateAdded}</p>
                             </div>
                           </div>
@@ -778,41 +780,43 @@ const JobList: React.FC = () => {
                     </div>
 
                     {/* Add Doc Input */}
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                        <input 
                          className={`${inputClass} text-sm`}
                          value={newAttachmentName}
                          onChange={(e) => setNewAttachmentName(e.target.value)}
                          placeholder="Document Name (e.g. Portfolio Link)"
                        />
-                       <select 
-                         className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 text-sm text-slate-700 dark:text-slate-300 outline-none"
-                         value={newAttachmentType}
-                         onChange={(e) => setNewAttachmentType(e.target.value as any)}
-                       >
-                         <option value="Resume">Resume</option>
-                         <option value="Cover Letter">Cover Letter</option>
-                         <option value="Portfolio">Portfolio</option>
-                         <option value="Reference">Reference</option>
-                         <option value="Other">Other</option>
-                       </select>
-                       <button 
-                         onClick={addAttachment}
-                         className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 rounded-lg font-medium transition-colors"
-                       >
-                         Add
-                       </button>
+                       <div className="flex gap-2">
+                          <select 
+                            className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 text-sm text-slate-700 dark:text-slate-300 outline-none flex-1"
+                            value={newAttachmentType}
+                            onChange={(e) => setNewAttachmentType(e.target.value as any)}
+                          >
+                            <option value="Resume">Resume</option>
+                            <option value="Cover Letter">Cover Letter</option>
+                            <option value="Portfolio">Portfolio</option>
+                            <option value="Reference">Reference</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          <button 
+                            onClick={addAttachment}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 rounded-lg font-medium transition-colors"
+                          >
+                            Add
+                          </button>
+                       </div>
                     </div>
                   </div>
 
                   {/* AI Cover Letter */}
                   <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
                       <label className={labelClass}>AI Cover Letter Generator</label>
                       <button 
                         onClick={handleGenerateCoverLetter}
                         disabled={isGenerating || !formData.role || !formData.company}
-                        className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-lg font-medium hover:bg-purple-200 dark:hover:bg-purple-900/60 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                        className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-lg font-medium hover:bg-purple-200 dark:hover:bg-purple-900/60 disabled:opacity-50 flex items-center justify-center gap-1.5 transition-colors w-full sm:w-auto"
                       >
                         {isGenerating ? <Loader2 className="animate-spin" size={12}/> : <Sparkles size={12}/>}
                         Generate with Gemini
@@ -842,26 +846,26 @@ const JobList: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
-               <div className="text-xs text-slate-400">
+            <div className="p-4 md:p-6 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 absolute bottom-0 w-full z-10 md:relative">
+               <div className="text-xs text-slate-400 hidden sm:block">
                  {activeTab === 'info' && 'Step 1: Basic Details'}
                  {activeTab === 'people' && 'Step 2: Key Contacts'}
                  {activeTab === 'jd' && 'Step 3: Add Context'}
                  {activeTab === 'prep' && 'Step 4: Prepare to Win'}
                  {activeTab === 'assets' && 'Step 5: Manage Files'}
                </div>
-               <div className="flex gap-3">
+               <div className="flex gap-3 w-full sm:w-auto">
                   <button 
                     onClick={() => setIsModalOpen(false)}
-                    className="px-5 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium transition-colors"
+                    className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium transition-colors"
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={handleSave}
-                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-lg shadow-indigo-200 dark:shadow-none transition-colors"
+                    className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-lg shadow-indigo-200 dark:shadow-none transition-colors"
                   >
-                    Save Application
+                    Save
                   </button>
                </div>
             </div>

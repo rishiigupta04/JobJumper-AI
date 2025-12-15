@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useJobContext } from '../context/JobContext';
 import { generateInterviewGuide, generateNegotiationStrategy } from '../services/geminiService';
 import { 
   Search, Plus, MapPin, Calendar, IndianRupee, Trash2, X, 
   Sparkles, RefreshCw, User, Mail, Phone, ExternalLink,
-  ChevronRight, Building2, BookOpen, HandCoins, FileText
+  ChevronRight, Building2, BookOpen, HandCoins, FileText, ArrowLeft
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Job } from '../types';
@@ -41,14 +41,15 @@ const Offers: React.FC = () => {
   });
 
   const selectedJob = useMemo(() => 
-    jobs.find(j => j.id === selectedOfferId) || offers[0] || null, 
-  [jobs, selectedOfferId, offers]);
+    jobs.find(j => j.id === selectedOfferId) || null, // Don't auto-select first on mobile logic
+  [jobs, selectedOfferId]);
 
-  React.useEffect(() => {
-    if (!selectedJob && offers.length > 0) {
+  // Auto-select first offer on Desktop only initially
+  useEffect(() => {
+    if (window.innerWidth >= 1024 && !selectedOfferId && offers.length > 0) {
       setSelectedOfferId(offers[0].id);
     }
-  }, [offers, selectedJob]);
+  }, [offers]);
 
   const filteredOffers = offers.filter(job => 
     job.company.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -191,7 +192,7 @@ const Offers: React.FC = () => {
   return (
     <div className="h-[calc(100vh-140px)] flex flex-col">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className={`flex justify-between items-center mb-6 ${selectedOfferId ? 'hidden lg:flex' : 'flex'}`}>
          <div>
             <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Offers Received</h2>
             <p className="text-slate-500 text-sm">{offers.length} Active Offers</p>
@@ -204,10 +205,10 @@ const Offers: React.FC = () => {
          </button>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6 h-full overflow-hidden">
+      <div className="flex flex-col lg:flex-row gap-6 h-full overflow-hidden relative">
         
-        {/* Left Column: List */}
-        <div className="w-full lg:w-1/3 flex flex-col gap-4 overflow-hidden">
+        {/* Left Column: List (Hidden on mobile when an offer is selected) */}
+        <div className={`w-full lg:w-1/3 flex flex-col gap-4 overflow-hidden ${selectedOfferId ? 'hidden lg:flex' : 'flex'}`}>
            {/* Search */}
            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -221,7 +222,7 @@ const Offers: React.FC = () => {
            </div>
 
            {/* Cards Container */}
-           <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+           <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar pb-20 lg:pb-0">
               {filteredOffers.map(job => (
                  <div 
                     key={job.id}
@@ -248,9 +249,13 @@ const Offers: React.FC = () => {
                        {job.salary && <span className="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300"><IndianRupee size={14} className="text-emerald-500"/> {job.salary}</span>}
                     </div>
                     
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 lg:hidden text-slate-300">
+                        <ChevronRight size={20} />
+                    </div>
+
                     <button 
                        onClick={(e) => handleDelete(e, job.id)}
-                       className="absolute bottom-4 right-4 p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                       className="absolute bottom-4 right-4 p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-md transition-colors opacity-0 group-hover:opacity-100 hidden lg:block"
                     >
                        <Trash2 size={16} />
                     </button>
@@ -259,53 +264,65 @@ const Offers: React.FC = () => {
            </div>
         </div>
 
-        {/* Right Column: Details - MAXIMIZED SPACE */}
-        <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden">
+        {/* Right Column: Details - MAXIMIZED SPACE (Full width on mobile when selected) */}
+        <div className={`flex-1 bg-white dark:bg-slate-900 lg:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden fixed inset-0 z-50 lg:static lg:z-0 lg:flex ${selectedOfferId ? 'flex' : 'hidden lg:flex'}`}>
            {selectedJob ? (
               <div className="flex-1 flex flex-col h-full overflow-hidden">
                  
                  {/* Navigation Bar (Clean, Minimal) */}
-                 <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 px-4">
-                    {/* Tabs */}
-                    <div className="flex gap-1 overflow-x-auto">
+                 <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 px-2 lg:px-4 py-2 lg:py-0">
+                    <div className="flex items-center gap-2 w-full lg:w-auto overflow-hidden">
+                        {/* Mobile Back Button */}
                         <button 
-                            onClick={() => setActiveTab('interview')}
-                            className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
-                                activeTab === 'interview' 
-                                    ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900' 
-                                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                            }`}
+                            onClick={() => setSelectedOfferId(null)} 
+                            className="lg:hidden p-2 text-slate-500 hover:text-slate-800 dark:hover:text-white"
                         >
-                            <BookOpen size={16} /> 
-                            Interview Prep
-                            {selectedJob.interviewGuide && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>}
+                            <ArrowLeft size={20} />
                         </button>
-                        <button 
-                            onClick={() => setActiveTab('negotiation')}
-                            className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
-                                activeTab === 'negotiation' 
-                                    ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900' 
-                                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                            }`}
-                        >
-                            <HandCoins size={16} /> 
-                            Negotiation
-                            {selectedJob.negotiationStrategy && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>}
-                        </button>
-                        <button 
-                            onClick={() => setActiveTab('details')}
-                            className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
-                                activeTab === 'details' 
-                                    ? 'border-slate-400 text-slate-800 dark:text-white bg-white dark:bg-slate-900' 
-                                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                            }`}
-                        >
-                            <FileText size={16} /> Job Details
-                        </button>
+                        
+                        {/* Tabs */}
+                        <div className="flex gap-1 overflow-x-auto flex-1 no-scrollbar">
+                            <button 
+                                onClick={() => setActiveTab('interview')}
+                                className={`px-3 lg:px-4 py-4 text-xs lg:text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'interview' 
+                                        ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900' 
+                                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <BookOpen size={16} /> 
+                                <span className="hidden sm:inline">Interview Prep</span>
+                                <span className="sm:hidden">Prep</span>
+                                {selectedJob.interviewGuide && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>}
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('negotiation')}
+                                className={`px-3 lg:px-4 py-4 text-xs lg:text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'negotiation' 
+                                        ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900' 
+                                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <HandCoins size={16} /> 
+                                <span className="hidden sm:inline">Negotiation</span>
+                                <span className="sm:hidden">Negotiate</span>
+                                {selectedJob.negotiationStrategy && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>}
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('details')}
+                                className={`px-3 lg:px-4 py-4 text-xs lg:text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'details' 
+                                        ? 'border-slate-400 text-slate-800 dark:text-white bg-white dark:bg-slate-900' 
+                                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <FileText size={16} /> Details
+                            </button>
+                        </div>
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center pl-4 border-l border-slate-200 dark:border-slate-800 ml-2">
+                    <div className="flex items-center pl-2 border-l border-slate-200 dark:border-slate-800 ml-2">
                         <button onClick={(e) => handleDelete(e, selectedJob.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="Delete Offer">
                             <Trash2 size={18} />
                         </button>
@@ -313,28 +330,28 @@ const Offers: React.FC = () => {
                  </div>
 
                  {/* Content Area - Full Height */}
-                 <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-white dark:bg-slate-900 custom-scrollbar">
+                 <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-white dark:bg-slate-900 custom-scrollbar pb-24 lg:pb-0">
                     
                     {/* Interview Guide Tab */}
                     {activeTab === 'interview' && (
                         <div className="animate-fade-in max-w-4xl mx-auto">
-                            <div className="flex justify-between items-center mb-6">
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
                                 <div>
-                                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Prep Guide: {selectedJob.role}</h2>
+                                    <h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white">{selectedJob.role} Guide</h2>
                                     <p className="text-slate-500 dark:text-slate-400 text-sm">AI-generated strategy based on the JD.</p>
                                 </div>
                                 <button 
                                     onClick={handleGenerateInterview}
                                     disabled={loading[`int_${selectedJob.id}`]}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium shadow-lg shadow-emerald-200 dark:shadow-none transition-all flex items-center gap-2 disabled:opacity-70 disabled:shadow-none"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium shadow-lg shadow-emerald-200 dark:shadow-none transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:shadow-none w-full sm:w-auto"
                                 >
                                     {loading[`int_${selectedJob.id}`] ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} />}
-                                    {loading[`int_${selectedJob.id}`] ? 'Analyzing...' : (selectedJob.interviewGuide ? 'Regenerate Guide' : 'Generate Guide')}
+                                    {loading[`int_${selectedJob.id}`] ? 'Analyzing...' : (selectedJob.interviewGuide ? 'Regenerate' : 'Generate Guide')}
                                 </button>
                             </div>
                             
                             {selectedJob.interviewGuide ? (
-                                <div className="prose prose-emerald max-w-none dark:prose-invert">
+                                <div className="prose prose-emerald max-w-none dark:prose-invert prose-sm md:prose-base">
                                     <ReactMarkdown components={MarkdownComponents}>
                                         {selectedJob.interviewGuide}
                                     </ReactMarkdown>
@@ -360,23 +377,23 @@ const Offers: React.FC = () => {
                     {/* Negotiation Tab */}
                     {activeTab === 'negotiation' && (
                         <div className="animate-fade-in max-w-4xl mx-auto">
-                            <div className="flex justify-between items-center mb-6">
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
                                 <div>
-                                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Negotiation Strategy</h2>
+                                    <h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white">Negotiation Strategy</h2>
                                     <p className="text-slate-500 dark:text-slate-400 text-sm">Maximize your offer for {selectedJob.company}.</p>
                                 </div>
                                 <button 
                                     onClick={handleGenerateNegotiation}
                                     disabled={loading[`neg_${selectedJob.id}`]}
-                                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl font-medium shadow-lg shadow-purple-200 dark:shadow-none transition-all flex items-center gap-2 disabled:opacity-70 disabled:shadow-none"
+                                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl font-medium shadow-lg shadow-purple-200 dark:shadow-none transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:shadow-none w-full sm:w-auto"
                                 >
                                     {loading[`neg_${selectedJob.id}`] ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} />}
-                                    {loading[`neg_${selectedJob.id}`] ? 'Analyzing...' : (selectedJob.negotiationStrategy ? 'Regenerate Strategy' : 'Create Strategy')}
+                                    {loading[`neg_${selectedJob.id}`] ? 'Analyzing...' : (selectedJob.negotiationStrategy ? 'Regenerate' : 'Create Strategy')}
                                 </button>
                             </div>
                             
                             {selectedJob.negotiationStrategy ? (
-                                <div className="prose prose-purple max-w-none dark:prose-invert">
+                                <div className="prose prose-purple max-w-none dark:prose-invert prose-sm md:prose-base">
                                     <ReactMarkdown components={MarkdownComponents}>
                                         {selectedJob.negotiationStrategy}
                                     </ReactMarkdown>
