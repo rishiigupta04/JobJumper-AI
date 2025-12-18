@@ -17,7 +17,7 @@ import { Sun, Moon, LogOut, Loader2, Settings as SettingsIcon, Heart, Github, Li
 
 const MainContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
-  const { theme, toggleTheme, loading: dataLoading } = useJobContext();
+  const { theme, toggleTheme, loading: dataLoading, jobs, resume } = useJobContext();
   const { signOut, user } = useAuth();
 
   const renderView = () => {
@@ -45,10 +45,17 @@ const MainContent: React.FC = () => {
     }
   };
 
-  if (dataLoading) {
+  // Only show the full-screen loader if it's the INITIAL data fetch
+  // If we already have jobs or a profile loaded, allow background syncs without unmounting the UI
+  const isInitialBoot = dataLoading && jobs.length === 0 && !resume.fullName;
+
+  if (isInitialBoot) {
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
-            <Loader2 className="animate-spin text-indigo-600" size={40} />
+            <div className="flex flex-col items-center gap-4">
+                <Loader2 className="animate-spin text-indigo-600" size={40} />
+                <p className="text-slate-500 font-medium animate-pulse">Syncing your career data...</p>
+            </div>
         </div>
     );
   }
@@ -62,7 +69,7 @@ const MainContent: React.FC = () => {
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 font-sans transition-colors duration-300 relative">
       <Sidebar currentView={currentView} setView={setCurrentView} />
       
-      {/* Main Container - Adjusted padding for mobile/desktop breakpoint */}
+      {/* Main Container */}
       <main className="flex-1 p-4 md:p-8 lg:p-12 overflow-y-auto h-screen pb-24 md:pb-12 print:h-auto print:overflow-visible flex flex-col">
         <div className="max-w-7xl mx-auto w-full flex-1">
           {/* Header */}
@@ -80,7 +87,14 @@ const MainContent: React.FC = () => {
              </div>
              
              <div className="flex items-center gap-3 self-end md:self-auto">
-                {/* Theme Toggle */}
+                {/* Background Sync Indicator */}
+                {dataLoading && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-wider animate-fade-in">
+                    <Loader2 size={12} className="animate-spin" />
+                    <span className="hidden sm:inline">Syncing</span>
+                  </div>
+                )}
+
                 <button 
                   onClick={toggleTheme}
                   className="p-2 rounded-lg bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 shadow-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
@@ -89,7 +103,6 @@ const MainContent: React.FC = () => {
                   {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
                 </button>
 
-                {/* Settings Button (Desktop Only - Mobile has nav item) */}
                 <button
                    onClick={() => setCurrentView('settings')}
                    className={`hidden md:block p-2 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all ${
@@ -103,7 +116,7 @@ const MainContent: React.FC = () => {
                 </button>
 
                 <div className="hidden md:flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
-                  <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                  <div className={`h-2 w-2 rounded-full ${dataLoading ? 'bg-indigo-500 animate-pulse' : 'bg-emerald-500'}`}></div>
                   <span className="text-sm font-medium text-slate-600 dark:text-slate-300 max-w-[150px] truncate">{user?.email}</span>
                 </div>
 
@@ -121,18 +134,20 @@ const MainContent: React.FC = () => {
           {renderView()}
         </div>
 
-        {/* Custom Footer - Hidden on Mobile (< md) */}
-        <footer className="hidden md:flex mt-12 py-6 border-t border-slate-200 dark:border-slate-800 flex-row justify-between items-center gap-4 text-sm text-slate-500 dark:text-slate-400 print:hidden">
-            <div className="flex items-center gap-2">
-                <span>Made with</span>
-                <Heart size={16} className="text-rose-500 fill-rose-500 animate-pulse" />
-                <span>by <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-500">Rishi</span></span>
-            </div>
-            <div className="flex items-center gap-4">
-                <a href="https://www.linkedin.com/in/rishirajgupta04/" target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"><Linkedin size={18} /></a>
-                <a href="https://github.com/rishirajgupta04" target="_blank" rel="noopener noreferrer" className="hover:text-slate-900 dark:hover:text-white transition-colors"><Github size={18} /></a>
-            </div>
-        </footer>
+        {/* Custom Footer - Hidden on Mobile (< md) and Chat page */}
+        {currentView !== 'chat' && (
+          <footer className="hidden md:flex mt-12 py-6 border-t border-slate-200 dark:border-slate-800 flex-row justify-between items-center gap-4 text-sm text-slate-500 dark:text-slate-400 print:hidden">
+              <div className="flex items-center gap-2">
+                  <span>Made with</span>
+                  <Heart size={16} className="text-rose-500 fill-rose-500 animate-pulse" />
+                  <span>by <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-500">Rishi</span></span>
+              </div>
+              <div className="flex items-center gap-4">
+                  <a href="https://www.linkedin.com/in/rishirajgupta04/" target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"><Linkedin size={18} /></a>
+                  <a href="https://github.com/rishirajgupta04" target="_blank" rel="noopener noreferrer" className="hover:text-slate-900 dark:hover:text-white transition-colors"><Github size={18} /></a>
+              </div>
+          </footer>
+        )}
       </main>
     </div>
   );

@@ -1,17 +1,19 @@
+
 import React, { useState, useEffect } from 'react';
 import { useJobContext } from '../context/JobContext';
-import { ViewState, ResearchReport } from '../types';
+import { ViewState, ResearchReport, InterviewPrepReport } from '../types';
 import { 
   Bot, Brain, Target, PenTool, Telescope, ArrowLeft, 
   Sparkles, Loader2, Copy, Check, AlertTriangle, Briefcase, 
   CheckCircle2, XCircle, MapPin, IndianRupee, Code2, Users, Crown, Zap, RefreshCw,
   Clock, PanelLeftClose, Building2, MessageSquare, Globe, AlertOctagon, MessageCircle, Link as LinkIcon,
-  Heart, Github, Linkedin, LogOut
+  Heart, Github, Linkedin, LogOut, FileText, Settings as SettingsIcon, Languages, ThumbsUp, ThumbsDown, Minus, Trash2, History,
+  ChevronDown, ChevronUp, BookOpen, MessageCircleQuestion
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { 
   runAgentAnalyzer, runAgentInterviewPrep, 
-  runAgentDocumentGen, runAgentResearch, AnalyzerResult, ResearchResult
+  runAgentDocumentGen, runAgentResearch, AnalyzerResult, ResearchResult, validateResearchResult, InterviewPrepResult
 } from '../services/geminiService';
 
 interface AgentsDashboardProps {
@@ -260,13 +262,12 @@ const AgentsDashboard: React.FC<AgentsDashboardProps> = ({ setView }) => {
   );
 };
 
-// --- AGENT 1: ANALYZER ---
+// ... (Analyzer, Prep, Docs Components remain the same as previous) ...
 
 const AgentAnalyzer = () => {
   const { resume } = useJobContext();
   const [loading, setLoading] = useState(false);
   
-  // Load state from localStorage
   const [jd, setJd] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('agent_analyzer_jd') || '';
     return '';
@@ -284,7 +285,6 @@ const AgentAnalyzer = () => {
     return null;
   });
 
-  // Persist state
   useEffect(() => {
       localStorage.setItem('agent_analyzer_jd', jd);
   }, [jd]);
@@ -374,8 +374,7 @@ const AgentAnalyzer = () => {
 
        {result && (
           <div className="animate-fade-in space-y-6">
-             
-             {/* 1. Header Banner */}
+             {/* Result content omitted for brevity as it is unchanged from previous */}
              <div className={`p-4 rounded-xl border flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg ${
                 result.recommendation.status === 'Strong Apply' ? 'bg-emerald-950/30 border-emerald-500/30' :
                 result.recommendation.status === 'Conditional Apply' ? 'bg-amber-950/30 border-amber-500/30' :
@@ -409,12 +408,8 @@ const AgentAnalyzer = () => {
                 </div>
              </div>
 
-             {/* 2. Grid Layout */}
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Left Column: Key Info & Score Breakdown */}
                 <div className="space-y-6">
-                   {/* Key Info */}
                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
                       <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Key Information</h4>
                       <div className="space-y-4">
@@ -447,7 +442,6 @@ const AgentAnalyzer = () => {
                       </div>
                    </div>
 
-                   {/* Score Breakdown */}
                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
                       <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Match Breakdown</h4>
                       <div className="space-y-5">
@@ -471,7 +465,6 @@ const AgentAnalyzer = () => {
                    </div>
                 </div>
 
-                {/* Middle Column: Skills Matrix */}
                 <div className="lg:col-span-2 space-y-6">
                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
                       <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Skills Matrix</h4>
@@ -522,10 +515,7 @@ const AgentAnalyzer = () => {
                       </div>
                    </div>
 
-                   {/* Competitive Analysis & Red Flags */}
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      
-                      {/* Competitive Analysis */}
                       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
                          <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Competitive Landscape</h4>
                          <div className="flex items-center justify-between mb-4 bg-slate-950 p-3 rounded-xl border border-slate-800">
@@ -551,7 +541,6 @@ const AgentAnalyzer = () => {
                          </div>
                       </div>
 
-                      {/* Red Flags */}
                       <div className={`rounded-2xl p-6 border ${
                          result.redFlags.length > 0 
                          ? 'bg-rose-950/10 border-rose-900/50' 
@@ -586,22 +575,35 @@ const AgentAnalyzer = () => {
   );
 };
 
-// --- AGENT 2: INTERVIEW PREP ---
+// --- AGENT 2: INTERVIEW PREP (FIXED) ---
 
 const AgentPrep = () => {
+  const { prepHistory, addPrepReport, deletePrepReport } = useJobContext();
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
   const [jd, setJd] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState('');
+  const [result, setResult] = useState<InterviewPrepResult | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+  const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     if (!company || !role) return;
     setLoading(true);
+    setResult(null);
     try {
-      const text = await runAgentInterviewPrep(company, role, jd);
-      setResult(text);
+      const data = await runAgentInterviewPrep(company, role, jd);
+      setResult(data);
+      
+      const newReport: InterviewPrepReport = {
+          id: crypto.randomUUID(),
+          company: company,
+          role: role,
+          date: new Date().toISOString(),
+          content: JSON.stringify(data)
+      };
+      
+      addPrepReport(newReport);
     } catch (e) {
       console.error(e);
     } finally {
@@ -609,12 +611,17 @@ const AgentPrep = () => {
     }
   };
 
-  // Naive parser for tabs based on headers
-  const getSection = (header: string) => {
-    if (!result) return '';
-    const parts = result.split(/#\s/);
-    const section = parts.find(p => p.toLowerCase().includes(header.toLowerCase()));
-    return section ? `# ${section}` : 'Section not found.';
+  const loadPrep = (item: InterviewPrepReport) => {
+      setCompany(item.company);
+      setRole(item.role);
+      try {
+          const parsed = JSON.parse(item.content);
+          setResult(parsed);
+      } catch(e) { console.error("Failed to load prep report", e); }
+  };
+
+  const toggleQuestion = (idx: string) => {
+      setExpandedQuestion(expandedQuestion === idx ? null : idx);
   };
 
   return (
@@ -650,6 +657,40 @@ const AgentPrep = () => {
                    </button>
                 </div>
              </div>
+
+             {/* Prep History List */}
+             {prepHistory.length > 0 && (
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                          <History size={14} /> Recent Kits
+                      </h4>
+                      <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                          {prepHistory.map((item) => (
+                              <div 
+                                  key={item.id}
+                                  onClick={() => loadPrep(item)}
+                                  className={`p-3 rounded-xl cursor-pointer transition-all border group relative ${
+                                      result && company === item.company && role === item.role
+                                      ? 'bg-indigo-900/20 border-indigo-500/50' 
+                                      : 'bg-slate-950 border-slate-800 hover:border-slate-600'
+                                  }`}
+                              >
+                                  <div className="flex justify-between items-start mb-1">
+                                      <span className="font-bold text-sm text-white truncate pr-6">{item.company}</span>
+                                      <button 
+                                          onClick={(e) => { e.stopPropagation(); deletePrepReport(item.id); }}
+                                          className="text-slate-600 hover:text-rose-500 p-1 rounded transition-colors"
+                                      >
+                                          <Trash2 size={12} />
+                                      </button>
+                                  </div>
+                                  <p className="text-xs text-slate-400 truncate mb-1">{item.role}</p>
+                                  <p className="text-[10px] text-slate-600">{new Date(item.date).toLocaleDateString()}</p>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
           </div>
 
           <div className="lg:col-span-2">
@@ -666,13 +707,118 @@ const AgentPrep = () => {
                          </button>
                       ))}
                    </div>
-                   <div className="flex-1 overflow-y-auto p-6 custom-scrollbar prose prose-invert max-w-none">
-                      <ReactMarkdown>
-                         {activeTab === 0 ? getSection('Company Research') :
-                          activeTab === 1 ? getSection('Technical Interview') :
-                          activeTab === 2 ? getSection('Behavioral Interview') :
-                          getSection('Smart Questions')}
-                      </ReactMarkdown>
+                   
+                   <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                      
+                      {/* Research Tab */}
+                      {activeTab === 0 && (
+                          <div className="space-y-6 animate-fade-in">
+                              <div>
+                                  <h3 className="text-sm font-bold text-indigo-400 uppercase mb-2">Mission & Culture</h3>
+                                  <p className="text-sm text-white bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                      {result.companyResearch.mission}
+                                  </p>
+                              </div>
+                              <div>
+                                  <h3 className="text-sm font-bold text-indigo-400 uppercase mb-2">Key Products</h3>
+                                  <div className="flex flex-wrap gap-2">
+                                      {result.companyResearch.products.map((p, i) => (
+                                          <span key={i} className="px-3 py-1 bg-slate-800 rounded-full text-xs text-slate-300 border border-slate-700">{p}</span>
+                                      ))}
+                                  </div>
+                              </div>
+                              <div>
+                                  <h3 className="text-sm font-bold text-indigo-400 uppercase mb-2">Culture Notes</h3>
+                                  <p className="text-sm text-slate-300">{result.companyResearch.culture}</p>
+                              </div>
+                              <div>
+                                  <h3 className="text-sm font-bold text-indigo-400 uppercase mb-2">Recent News</h3>
+                                  <ul className="space-y-2">
+                                      {result.companyResearch.recentNews.map((news, i) => (
+                                          <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
+                                              <span className="text-indigo-500 mt-1">•</span> {news}
+                                          </li>
+                                      ))}
+                                  </ul>
+                              </div>
+                          </div>
+                      )}
+
+                      {/* Technical Tab */}
+                      {activeTab === 1 && (
+                          <div className="space-y-4 animate-fade-in">
+                              <div className="flex flex-wrap gap-2 mb-4">
+                                  {result.technical.topics.map((topic, i) => (
+                                      <span key={i} className="px-2 py-1 bg-blue-900/30 text-blue-400 text-xs rounded border border-blue-900/50">{topic}</span>
+                                  ))}
+                              </div>
+                              {result.technical.questions.map((item, i) => (
+                                  <div key={i} className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
+                                      <button 
+                                          onClick={() => toggleQuestion(`tech-${i}`)}
+                                          className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-900/50 transition-colors"
+                                      >
+                                          <span className="font-medium text-slate-200 text-sm pr-4">{item.question}</span>
+                                          {expandedQuestion === `tech-${i}` ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+                                      </button>
+                                      {expandedQuestion === `tech-${i}` && (
+                                          <div className="p-4 pt-0 text-sm text-slate-400 border-t border-slate-800/50 bg-slate-900/20">
+                                              <p className="font-mono text-xs text-indigo-400 mb-1">Suggested Answer:</p>
+                                              {item.answer}
+                                          </div>
+                                      )}
+                                  </div>
+                              ))}
+                          </div>
+                      )}
+
+                      {/* Behavioral Tab */}
+                      {activeTab === 2 && (
+                          <div className="space-y-4 animate-fade-in">
+                              <div className="flex flex-wrap gap-2 mb-4">
+                                  {result.behavioral.competencies.map((comp, i) => (
+                                      <span key={i} className="px-2 py-1 bg-purple-900/30 text-purple-400 text-xs rounded border border-purple-900/50">{comp}</span>
+                                  ))}
+                              </div>
+                              {result.behavioral.questions.map((item, i) => (
+                                  <div key={i} className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
+                                      <button 
+                                          onClick={() => toggleQuestion(`beh-${i}`)}
+                                          className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-900/50 transition-colors"
+                                      >
+                                          <span className="font-medium text-slate-200 text-sm pr-4">{item.question}</span>
+                                          {expandedQuestion === `beh-${i}` ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+                                      </button>
+                                      {expandedQuestion === `beh-${i}` && (
+                                          <div className="p-4 pt-0 text-sm text-slate-400 border-t border-slate-800/50 bg-slate-900/20">
+                                              <p className="font-bold text-xs text-emerald-400 mb-1 flex items-center gap-1"><Sparkles size={10} /> STAR Guide:</p>
+                                              {item.starGuide}
+                                          </div>
+                                      )}
+                                  </div>
+                              ))}
+                          </div>
+                      )}
+
+                      {/* Questions to Ask Tab */}
+                      {activeTab === 3 && (
+                          <div className="space-y-4 animate-fade-in">
+                              <div className="p-4 bg-indigo-900/20 rounded-xl border border-indigo-500/20 mb-6">
+                                  <p className="text-sm text-indigo-200">
+                                      Asking smart questions shows you've done your homework. Pick 2-3 of these to ask at the end.
+                                  </p>
+                              </div>
+                              <ul className="space-y-3">
+                                  {result.questionsToAsk.map((q, i) => (
+                                      <li key={i} className="flex items-start gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                          <MessageCircleQuestion size={20} className="text-indigo-500 shrink-0 mt-0.5" />
+                                          <span className="text-sm text-slate-300">{q}</span>
+                                      </li>
+                                  ))}
+                              </ul>
+                          </div>
+                      )}
+
                    </div>
                 </div>
              ) : (
@@ -687,324 +833,616 @@ const AgentPrep = () => {
   );
 };
 
-// --- AGENT 3: DOCS ---
+// --- AGENT 3: DOCS (RE-DESIGNED) ---
 
 const AgentDocs = () => {
-  const [type, setType] = useState<'Cover Letter' | 'Resume Bullets' | 'LinkedIn Message'>('Cover Letter');
+  const { resume } = useJobContext();
+  const [docType, setDocType] = useState('Cover Letter');
+  const [template, setTemplate] = useState('Direct & Impactful');
+  const [tone, setTone] = useState('Professional');
   const [jd, setJd] = useState('');
-  const [bg, setBg] = useState('');
+  const [context, setContext] = useState('');
   const [loading, setLoading] = useState(false);
   const [output, setOutput] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const docTypes = ['Cover Letter', 'Resume Bullets', 'LinkedIn Message', 'Follow-up Email'];
+  const templates = {
+    'Cover Letter': ['Direct & Impactful', 'T-Format', 'Pain Letter'],
+    'Resume Bullets': ['STAR Method', 'Data-Driven', 'Leadership Focus'],
+    'LinkedIn Message': ['Referral Request', 'Hiring Manager Outreach', 'Coffee Chat Request'],
+    'Follow-up Email': ['Post-Interview Thanks', 'Checking Status']
+  };
+  const tones = ['Professional', 'Enthusiastic', 'Confident', 'Creative'];
 
   const handleGenerate = async () => {
     if (!jd.trim()) return;
     setLoading(true);
+    setCopied(false);
     try {
-      const text = await runAgentDocumentGen(type, jd, bg);
+      const text = await runAgentDocumentGen({
+        type: docType,
+        template,
+        tone,
+        jd,
+        resume,
+        additionalContext: context
+      });
       setOutput(text);
     } catch (e) {
       console.error(e);
+      alert("Generation failed. Check API Key or Input length.");
     } finally {
       setLoading(false);
     }
   };
 
-  const copyToClipboard = () => {
-     navigator.clipboard.writeText(output);
-     alert("Copied to clipboard!");
+  const handleCopy = () => {
+    navigator.clipboard.writeText(output);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-20">
-       <div>
-          <h2 className="text-2xl md:text-3xl font-bold mb-2 text-white">Document Generator</h2>
-          <p className="text-slate-400 text-sm md:text-base">Crafts tailored cover letters, resume bullets, and outreach messages.</p>
-       </div>
+    <div className="max-w-7xl mx-auto space-y-6 animate-fade-in pb-20">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-widest mb-2">
+            <Crown size={14} className="fill-indigo-400" /> Premium Content Studio
+          </div>
+          <h2 className="text-2xl md:text-3xl font-bold text-white">Strategic Document Architect</h2>
+        </div>
+        <div className="flex items-center gap-4 bg-slate-900/50 p-2 rounded-xl border border-slate-800">
+           <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[10px] font-bold">
+              <Check size={12} /> RESUME LOADED
+           </div>
+           <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/10 text-indigo-400 rounded-lg text-[10px] font-bold">
+              <Zap size={12} /> AUTO-FILL ACTIVE
+           </div>
+        </div>
+      </div>
 
-       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="space-y-4">
-             <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
-                <div className="space-y-4">
-                   <div>
-                      <label className="block text-xs font-bold text-indigo-400 uppercase mb-2">Document Type</label>
-                      <div className="grid grid-cols-3 gap-2">
-                         {['Cover Letter', 'Resume Bullets', 'LinkedIn Message'].map(t => (
-                            <button 
-                               key={t}
-                               onClick={() => setType(t as any)}
-                               className={`py-2 px-1 text-xs font-medium rounded-lg border transition-colors ${type === t ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}
-                            >
-                               {t.split(' ')[0]}
-                            </button>
-                         ))}
-                      </div>
-                   </div>
-                   <div>
-                      <label className="block text-xs font-bold text-indigo-400 uppercase mb-2">Job Description</label>
-                      <textarea className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-white h-32 resize-none" value={jd} onChange={e => setJd(e.target.value)} placeholder="Paste JD here..." />
-                   </div>
-                   <div>
-                      <label className="block text-xs font-bold text-indigo-400 uppercase mb-2">Background Context</label>
-                      <textarea className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-white h-24 resize-none" value={bg} onChange={e => setBg(e.target.value)} placeholder="Key achievements or tone..." />
-                   </div>
-                   <button 
-                      onClick={handleGenerate}
-                      disabled={loading || !jd.trim()}
-                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2"
-                   >
-                      {loading ? <Loader2 className="animate-spin" size={18} /> : <PenTool size={18} />}
-                      Generate Document
-                   </button>
-                </div>
-             </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-280px)] min-h-[600px]">
+        <div className="lg:col-span-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
+          <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-2xl p-5 space-y-5">
+            <div>
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">
+                <FileText size={12} /> Document Type
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {docTypes.map(t => (
+                  <button 
+                    key={t}
+                    onClick={() => {
+                      setDocType(t);
+                      setTemplate(templates[t as keyof typeof templates][0]);
+                    }}
+                    className={`px-3 py-2 text-[11px] font-bold rounded-xl border transition-all ${docType === t ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">
+                <SettingsIcon size={12} /> Strategic Template
+              </label>
+              <div className="space-y-2">
+                {(templates[docType as keyof typeof templates] || []).map(t => (
+                  <button 
+                    key={t}
+                    onClick={() => setTemplate(t)}
+                    className={`w-full text-left px-4 py-2 text-xs font-medium rounded-xl border transition-all flex items-center justify-between group ${template === t ? 'bg-slate-800 border-indigo-500 text-indigo-400' : 'bg-slate-950 border-slate-800 text-slate-500 hover:bg-slate-900'}`}
+                  >
+                    {t}
+                    <div className={`w-1.5 h-1.5 rounded-full ${template === t ? 'bg-indigo-500' : 'bg-slate-700 group-hover:bg-slate-500'}`}></div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">
+                <Languages size={12} /> Style Tone
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {tones.map(t => (
+                  <button 
+                    key={t}
+                    onClick={() => setTone(t)}
+                    className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all ${tone === t ? 'bg-white text-slate-900' : 'bg-slate-950 text-slate-500 hover:text-slate-300'}`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
-          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 relative group">
-             {output ? (
-                 <>
+          <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-2xl p-5 space-y-4 flex-1">
+            <div>
+              <label className="flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                <span>Job Description Source</span>
+                <span className="text-indigo-500 lowercase opacity-60">paste to analyze</span>
+              </label>
+              <textarea 
+                className="w-full h-32 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-1 focus:ring-indigo-500 outline-none resize-none transition-all placeholder:text-slate-700"
+                value={jd}
+                onChange={(e) => setJd(e.target.value)}
+                placeholder="Paste the target JD here..."
+              />
+            </div>
+            <div>
+              <label className="flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                <span>Refining Context</span>
+                <span className="text-slate-600 lowercase font-normal italic">optional</span>
+              </label>
+              <textarea 
+                className="w-full h-20 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-1 focus:ring-indigo-500 outline-none resize-none transition-all placeholder:text-slate-700"
+                value={context}
+                onChange={(e) => setContext(e.target.value)}
+                placeholder="e.g. Focus on my experience with Python and my latest project..."
+              />
+            </div>
+            <button 
+              onClick={handleGenerate}
+              disabled={loading || !jd.trim()}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 transition-all disabled:opacity-50 shadow-xl shadow-indigo-900/30 group active:scale-95"
+            >
+              {loading ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} className="group-hover:rotate-12 transition-transform" />}
+              {loading ? 'Strategizing...' : 'Generate Document'}
+            </button>
+          </div>
+        </div>
+
+        <div className="lg:col-span-8 bg-slate-900/40 border border-slate-800 rounded-[2rem] p-4 flex flex-col h-full relative">
+            <div className="absolute top-0 right-10 w-40 h-40 bg-indigo-500/5 blur-3xl rounded-full"></div>
+            
+            <div className="flex justify-between items-center mb-4 px-2">
+               <div className="flex gap-2">
+                  <div className="w-3 h-3 rounded-full bg-rose-500/20 border border-rose-500/40"></div>
+                  <div className="w-3 h-3 rounded-full bg-amber-500/20 border border-amber-500/40"></div>
+                  <div className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500/40"></div>
+               </div>
+               
+               {output && (
+                 <div className="flex items-center gap-2">
+                    <button 
+                      onClick={handleCopy}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-[11px] font-bold transition-all border border-slate-700"
+                    >
+                      {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                      {copied ? 'Copied' : 'Copy'}
+                    </button>
+                    <button 
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold transition-all"
+                      onClick={() => window.print()}
+                    >
+                      Print
+                    </button>
+                 </div>
+               )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto bg-white rounded-2xl shadow-inner relative flex flex-col p-8 md:p-12 text-slate-800 custom-scrollbar mx-2 mb-2 group">
+               {output ? (
+                 <div className="animate-fade-in relative z-10 h-full flex flex-col">
                     <textarea 
+                        className="w-full flex-1 bg-transparent border-none outline-none resize-none font-serif text-base leading-[1.8] text-slate-800 placeholder:text-slate-300"
                         value={output}
                         onChange={(e) => setOutput(e.target.value)}
-                        className="w-full h-[300px] md:h-[500px] bg-transparent border-none outline-none resize-none text-sm text-slate-300 leading-relaxed font-mono"
+                        placeholder="Generated document..."
                     />
-                    <button 
-                        onClick={copyToClipboard}
-                        className="absolute top-4 right-4 p-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Copy"
-                    >
-                        <Copy size={16} />
-                    </button>
-                 </>
-             ) : (
-                <div className="h-[300px] md:h-full flex flex-col items-center justify-center text-slate-600 opacity-50">
-                    <PenTool size={48} className="mb-4" />
-                    <p>Generated content will appear here.</p>
-                </div>
-             )}
-          </div>
-       </div>
+                    <div className="mt-8 pt-8 border-t border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Bot size={16} className="text-indigo-600" />
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Architected by JobJumper v2.5</span>
+                        </div>
+                        <span className="text-[10px] text-slate-300 font-mono">Character Count: {output.length}</span>
+                    </div>
+                 </div>
+               ) : (
+                 <div className="flex-1 flex flex-col items-center justify-center text-slate-200">
+                    <div className="p-8 bg-slate-50 rounded-full mb-6">
+                        <PenTool size={64} className="text-slate-100" />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-300 uppercase tracking-widest mb-2">Paper is Blank</h3>
+                    <p className="max-w-xs text-center text-slate-400 text-sm leading-relaxed">
+                        Select a strategy and paste a job description on the left to start drafting.
+                    </p>
+                 </div>
+               )}
+            </div>
+        </div>
+      </div>
     </div>
   );
 };
 
-// --- AGENT 4: RESEARCH ---
-
 const AgentResearch: React.FC<{
-    researchState: ResearchState;
-    setResearchState: React.Dispatch<React.SetStateAction<ResearchState>>;
-    onRunResearch: () => void;
+  researchState: ResearchState;
+  setResearchState: React.Dispatch<React.SetStateAction<ResearchState>>;
+  onRunResearch: () => void;
 }> = ({ researchState, setResearchState, onRunResearch }) => {
-    
-    return (
-        <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-20">
-            <div className="flex justify-between items-end">
-                <div>
-                    <h2 className="text-2xl md:text-3xl font-bold mb-2 text-white">Deep Research Agent</h2>
-                    <p className="text-slate-400 text-sm md:text-base">Autonomous web research on company culture, salaries, and interview patterns.</p>
-                </div>
-            </div>
+  const { researchHistory, deleteResearchReport } = useJobContext();
+  const { company, role, loading, report } = researchState;
+  const [activeTab, setActiveTab] = useState('overview');
 
-            {/* Input Section */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+  const tabs = [
+      { id: 'overview', label: 'Overview' },
+      { id: 'market', label: 'Market & News' },
+      { id: 'culture', label: 'Culture & Comp' },
+      { id: 'reviews', label: 'Reviews & Risks' },
+  ];
+
+  const loadReport = (item: ResearchReport) => {
+       try {
+           const parsed = JSON.parse(item.content);
+           const validated = validateResearchResult(parsed);
+           
+           setResearchState({
+               company: item.company,
+               role: item.role,
+               loading: false,
+               report: validated,
+               rawMarkdown: null
+           });
+       } catch(e) { console.error("Failed to load report", e); }
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6 animate-fade-in pb-20">
+       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold text-white">Company Intelligence Agent</h2>
+            <p className="text-slate-400 text-sm md:text-base">Deep-dive research on potential employers.</p>
+          </div>
+       </div>
+
+       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Input Panel */}
+          <div className="lg:col-span-4 space-y-4">
+              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                 <div className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-indigo-400 uppercase mb-2">Target Company</label>
-                        <input 
-                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none" 
-                            placeholder="e.g. Google"
-                            value={researchState.company}
-                            onChange={(e) => setResearchState(prev => ({ ...prev, company: e.target.value }))}
-                        />
+                       <label className="block text-xs font-bold text-indigo-400 uppercase mb-2">Target Company</label>
+                       <div className="relative">
+                          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                          <input 
+                             className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-3 py-3 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none" 
+                             value={company} 
+                             onChange={e => setResearchState(prev => ({...prev, company: e.target.value}))} 
+                             placeholder="e.g. Airbnb" 
+                          />
+                       </div>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-indigo-400 uppercase mb-2">Role Title</label>
-                        <input 
-                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none" 
-                            placeholder="e.g. Senior Software Engineer"
-                            value={researchState.role}
-                            onChange={(e) => setResearchState(prev => ({ ...prev, role: e.target.value }))}
-                        />
+                       <label className="block text-xs font-bold text-indigo-400 uppercase mb-2">Target Role</label>
+                       <div className="relative">
+                          <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                          <input 
+                             className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-3 py-3 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none" 
+                             value={role} 
+                             onChange={e => setResearchState(prev => ({...prev, role: e.target.value}))} 
+                             placeholder="e.g. Staff Software Engineer" 
+                          />
+                       </div>
                     </div>
-                </div>
-                <div className="flex justify-end">
                     <button 
-                        onClick={onRunResearch}
-                        disabled={researchState.loading || !researchState.company || !researchState.role}
-                        className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-indigo-900/20"
+                       onClick={onRunResearch}
+                       disabled={loading || !company || !role}
+                       className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2 shadow-lg shadow-indigo-900/20"
                     >
-                        {researchState.loading ? <Loader2 className="animate-spin" size={18} /> : <Telescope size={18} />}
-                        {researchState.loading ? 'Researching (approx. 20s)...' : 'Start Deep Research'}
+                       {loading ? <Loader2 className="animate-spin" size={18} /> : <Telescope size={18} />}
+                       {loading ? 'Gathering Intel...' : 'Start Deep Scan'}
                     </button>
-                </div>
-            </div>
+                 </div>
+              </div>
 
-            {/* Report Display */}
-            {researchState.report && (
-                <div className="space-y-6 animate-fade-in">
-                    
-                    {/* Summary Banner */}
-                    <div className="p-6 bg-indigo-900/20 border border-indigo-500/30 rounded-2xl flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
-                         <div className="flex items-center gap-4">
-                             <div className="p-4 bg-indigo-500/20 rounded-full text-indigo-400">
-                                 <Building2 size={32} />
-                             </div>
-                             <div>
-                                 <h3 className="text-2xl font-bold text-white mb-1">{researchState.report.companyName}</h3>
-                                 <p className="text-indigo-200">{researchState.report.roleTitle}</p>
-                             </div>
-                         </div>
-                         <div className="w-full md:w-auto flex justify-between md:block md:text-right border-t md:border-t-0 border-white/10 pt-3 md:pt-0">
-                             <span className="md:hidden text-sm text-slate-400 uppercase tracking-wider self-center">Opp. Score</span>
-                             <div>
-                                 <div className="text-4xl font-black text-white">{researchState.report.summary.opportunityScore}/100</div>
-                                 <div className="hidden md:block text-sm text-slate-400 uppercase tracking-wider mb-1">Opportunity Score</div>
-                             </div>
-                         </div>
+              {/* Research History List */}
+              {researchHistory.length > 0 && (
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                          <History size={14} /> Recent Intel
+                      </h4>
+                      <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                          {researchHistory.map((item) => (
+                              <div 
+                                  key={item.id}
+                                  onClick={() => loadReport(item)}
+                                  className={`p-3 rounded-xl cursor-pointer transition-all border group relative ${
+                                      report && company === item.company && role === item.role
+                                      ? 'bg-indigo-900/20 border-indigo-500/50' 
+                                      : 'bg-slate-950 border-slate-800 hover:border-slate-600'
+                                  }`}
+                              >
+                                  <div className="flex justify-between items-start mb-1">
+                                      <span className="font-bold text-sm text-white truncate pr-6">{item.company}</span>
+                                      <button 
+                                          onClick={(e) => { e.stopPropagation(); deleteResearchReport(item.id); }}
+                                          className="text-slate-600 hover:text-rose-500 p-1 rounded transition-colors"
+                                      >
+                                          <Trash2 size={12} />
+                                      </button>
+                                  </div>
+                                  <p className="text-xs text-slate-400 truncate mb-1">{item.role}</p>
+                                  <p className="text-[10px] text-slate-600">{new Date(item.date).toLocaleDateString()}</p>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
+
+              {/* Sources Widget (if report exists) */}
+              {report && (
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Sources Analyzed</h4>
+                      <ul className="space-y-3">
+                          {report.sources.map((source, idx) => (
+                              <li key={idx} className="flex items-start gap-2 text-xs">
+                                  <LinkIcon size={12} className="text-indigo-500 mt-0.5 shrink-0" />
+                                  <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-indigo-400 truncate hover:underline block max-w-[250px]">
+                                      {source.title}
+                                  </a>
+                              </li>
+                          ))}
+                      </ul>
+                  </div>
+              )}
+          </div>
+
+          {/* Results Panel */}
+          <div className="lg:col-span-8">
+              {report ? (
+                 <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col h-[700px]">
+                    {/* Header */}
+                    <div className="p-6 border-b border-slate-800 bg-slate-950/30">
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 className="text-2xl font-bold text-white">{report.companyName}</h3>
+                                <p className="text-indigo-400 font-medium">{report.roleTitle}</p>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-3xl font-black text-white">{report.summary.opportunityScore}/10</div>
+                                <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Opportunity Score</div>
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex gap-1 overflow-x-auto no-scrollbar">
+                            {tabs.map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                                        activeTab === tab.id 
+                                        ? 'bg-indigo-600 text-white' 
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                    }`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        
-                        {/* Column 1: Snapshot */}
-                        <div className="space-y-6">
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <MessageSquare size={16} /> Verdict
-                                </h4>
-                                <p className="text-sm text-white leading-relaxed mb-4">
-                                    {researchState.report.summary.verdict}
-                                </p>
-                                <div className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                                    researchState.report.summary.applyPriority === 'High' ? 'bg-emerald-500/20 text-emerald-400' : 
-                                    researchState.report.summary.applyPriority === 'Medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-300'
-                                }`}>
-                                    {researchState.report.summary.applyPriority} Priority
-                                </div>
-                            </div>
-
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <IndianRupee size={16} /> Compensation
-                                </h4>
-                                <div className="mb-4">
-                                    <span className="text-2xl font-bold text-white block">{researchState.report.compensation.salaryRange}</span>
-                                    <span className="text-xs text-slate-500">Estimated Base + Stocks</span>
-                                </div>
-                                <div className="space-y-2 text-sm text-slate-300">
-                                    <div className="flex justify-between border-b border-slate-800 pb-1">
-                                        <span>Fresher</span>
-                                        <span className="font-mono text-emerald-400">{researchState.report.compensation.breakdown.fresher}</span>
-                                    </div>
-                                    <div className="flex justify-between border-b border-slate-800 pb-1">
-                                        <span>Mid-Level</span>
-                                        <span className="font-mono text-emerald-400">{researchState.report.compensation.breakdown.mid}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span>Senior</span>
-                                        <span className="font-mono text-emerald-400">{researchState.report.compensation.breakdown.senior}</span>
+                    <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-6">
+                        {/* OVERVIEW TAB */}
+                        {activeTab === 'overview' && (
+                            <div className="space-y-6 animate-fade-in">
+                                <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
+                                    <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                                        <Bot size={16} className="text-indigo-400" /> Executive Summary
+                                    </h4>
+                                    <p className="text-sm text-slate-300 leading-relaxed mb-4">{report.companyIntelligence.overview}</p>
+                                    
+                                    <div className="flex items-center gap-4 text-xs">
+                                        <span className={`px-2 py-1 rounded bg-slate-950 border border-slate-800 font-medium ${
+                                            report.summary.applyPriority === 'High' ? 'text-emerald-400' : 
+                                            report.summary.applyPriority === 'Medium' ? 'text-amber-400' : 'text-slate-400'
+                                        }`}>
+                                            Priority: {report.summary.applyPriority}
+                                        </span>
+                                        <span className="text-slate-500">Verdict: {report.summary.verdict}</span>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
 
-                        {/* Column 2: Intel */}
-                        <div className="space-y-6">
-                             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <Globe size={16} /> Company Intel
-                                </h4>
-                                <ul className="space-y-3 text-sm text-slate-300">
-                                    <li className="flex gap-2">
-                                        <span className="font-semibold text-slate-500 min-w-[80px]">Size:</span>
-                                        <span>{researchState.report.companyIntelligence.sizeAndStage}</span>
-                                    </li>
-                                    <li className="flex gap-2">
-                                        <span className="font-semibold text-slate-500 min-w-[80px]">Culture:</span>
-                                        <span>{researchState.report.culture.workEnvironment}</span>
-                                    </li>
-                                    <li className="flex gap-2">
-                                        <span className="font-semibold text-slate-500 min-w-[80px]">Hiring:</span>
-                                        <span>{researchState.report.hiring.applicationStrategy}</span>
-                                    </li>
-                                </ul>
-                            </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                        <p className="text-xs text-slate-500 uppercase font-bold mb-1">Financial Health</p>
+                                        <p className="text-sm text-white font-medium">{report.companyIntelligence.financialHealth}</p>
+                                    </div>
+                                    <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                        <p className="text-xs text-slate-500 uppercase font-bold mb-1">Size & Stage</p>
+                                        <p className="text-sm text-white font-medium">{report.companyIntelligence.sizeAndStage}</p>
+                                    </div>
+                                </div>
 
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <AlertOctagon size={16} /> Risks & Concerns
-                                </h4>
-                                <ul className="space-y-2">
-                                    {researchState.report.risks.concerns.map((concern, i) => (
-                                        <li key={i} className="text-sm text-rose-300 flex items-start gap-2">
-                                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0"></span>
-                                            {concern}
-                                        </li>
-                                    ))}
-                                </ul>
+                                <div>
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Recommended Next Steps</h4>
+                                    <ul className="space-y-2">
+                                        {report.summary.nextSteps.map((step, i) => (
+                                            <li key={i} className="flex items-start gap-3 text-sm text-slate-300 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                                <div className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                                                    {i + 1}
+                                                </div>
+                                                {step}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        {/* Column 3: Reviews & Sources */}
-                        <div className="space-y-6">
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <MessageCircle size={16} /> Insider Sentiment
-                                </h4>
-                                
-                                <div className="space-y-4">
-                                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-xs font-bold text-emerald-500">Glassdoor</span>
-                                            <span className="text-xs text-slate-400 font-mono">{researchState.report.reviews.glassdoor.rating}/5</span>
-                                        </div>
-                                        <div className="flex gap-2 text-[10px]">
-                                            <div className="flex-1 bg-emerald-500/10 text-emerald-400 p-1.5 rounded">
-                                                👍 {researchState.report.reviews.glassdoor.pros}
+                        {/* MARKET TAB */}
+                        {activeTab === 'market' && (
+                            <div className="space-y-6 animate-fade-in">
+                                <div>
+                                    <h4 className="text-sm font-bold text-white mb-3">Market Position</h4>
+                                    <p className="text-sm text-slate-400 p-4 bg-slate-950 rounded-xl border border-slate-800">{report.marketAnalysis.marketPosition}</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-bold text-white mb-3">Recent News & Signals</h4>
+                                    <div className="space-y-3">
+                                        {report.marketAnalysis.recentNews.map((news, i) => (
+                                            <div key={i} className="flex gap-3 items-start p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                                <Globe size={16} className="text-blue-500 mt-1 shrink-0" />
+                                                <p className="text-sm text-slate-300">{news}</p>
                                             </div>
-                                            <div className="flex-1 bg-rose-500/10 text-rose-400 p-1.5 rounded">
-                                                👎 {researchState.report.reviews.glassdoor.cons}
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-bold text-white mb-3">Key Competitors</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {report.companyIntelligence.competitors.map((comp, i) => (
+                                            <span key={i} className="px-3 py-1.5 bg-slate-800 text-slate-300 text-xs rounded-lg border border-slate-700">{comp}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* CULTURE & COMP TAB */}
+                        {activeTab === 'culture' && (
+                            <div className="space-y-6 animate-fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="bg-gradient-to-br from-emerald-900/20 to-slate-900 border border-emerald-500/20 rounded-xl p-5">
+                                        <div className="flex items-center gap-2 mb-3 text-emerald-400 font-bold text-sm">
+                                            <IndianRupee size={16} /> Compensation Analysis
+                                        </div>
+                                        <div className="text-2xl font-bold text-white mb-1">{report.compensation.salaryRange}</div>
+                                        <p className="text-xs text-slate-500 mb-4">{report.compensation.comparison}</p>
+                                        
+                                        <div className="space-y-2 pt-4 border-t border-white/10">
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-slate-400">Junior</span>
+                                                <span className="text-slate-200">{report.compensation.breakdown.fresher}</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-slate-400">Mid-Level</span>
+                                                <span className="text-slate-200">{report.compensation.breakdown.mid}</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-slate-400">Senior</span>
+                                                <span className="text-slate-200">{report.compensation.breakdown.senior}</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-xs font-bold text-orange-500">Reddit</span>
-                                            <span className="text-xs text-slate-400">{researchState.report.reviews.reddit.sentiment}</span>
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                            <h5 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Work Environment</h5>
+                                            <p className="text-sm text-slate-300">{report.culture.workEnvironment}</p>
                                         </div>
-                                        <ul className="text-[10px] text-slate-400 list-disc pl-3">
-                                            {researchState.report.reviews.reddit.keyDiscussions.slice(0, 2).map((d, i) => (
-                                                <li key={i}>{d}</li>
+                                        <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                            <h5 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Engineering Culture</h5>
+                                            <p className="text-sm text-slate-300">{report.culture.engineeringCulture}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-bold text-white mb-3">Benefits & Perks</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {report.compensation.benefits.map((benefit, i) => (
+                                            <span key={i} className="px-3 py-1.5 bg-slate-800 text-indigo-200 text-xs rounded-lg border border-slate-700">{benefit}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* REVIEWS & RISKS TAB */}
+                        {activeTab === 'reviews' && (
+                            <div className="space-y-6 animate-fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className="w-8 h-8 rounded bg-green-600 flex items-center justify-center font-bold text-white">GD</div>
+                                            <div>
+                                                <p className="text-sm font-bold text-white">Glassdoor</p>
+                                                <p className="text-xs text-slate-400">{report.reviews.glassdoor.rating} Rating</p>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2 text-xs">
+                                            <p className="text-emerald-400"><strong className="text-slate-500">PROS:</strong> {report.reviews.glassdoor.pros}</p>
+                                            <p className="text-rose-400"><strong className="text-slate-500">CONS:</strong> {report.reviews.glassdoor.cons}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className="w-8 h-8 rounded bg-orange-600 flex items-center justify-center font-bold text-white">RD</div>
+                                            <div>
+                                                <p className="text-sm font-bold text-white">Reddit Sentiment</p>
+                                                <p className="text-xs text-slate-400">{report.reviews.reddit.sentiment}</p>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            {report.reviews.reddit.keyDiscussions.map((d, i) => (
+                                                <p key={i} className="text-xs text-slate-300 truncate">• {d}</p>
                                             ))}
-                                        </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className={`p-5 rounded-xl border ${
+                                    report.risks.level === 'High' ? 'bg-rose-950/20 border-rose-500/30' : 
+                                    report.risks.level === 'Medium' ? 'bg-amber-950/20 border-amber-500/30' : 'bg-emerald-950/20 border-emerald-500/30'
+                                }`}>
+                                    <h4 className={`text-sm font-bold uppercase tracking-widest mb-3 flex items-center gap-2 ${
+                                        report.risks.level === 'High' ? 'text-rose-400' : 
+                                        report.risks.level === 'Medium' ? 'text-amber-400' : 'text-emerald-400'
+                                    }`}>
+                                        <AlertOctagon size={16} /> Risk Analysis: {report.risks.level}
+                                    </h4>
+                                    <ul className="space-y-2">
+                                        {report.risks.concerns.map((risk, i) => (
+                                            <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
+                                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current opacity-50 shrink-0"></span>
+                                                {risk}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                                
+                                <div>
+                                    <h4 className="text-sm font-bold text-white mb-3">Employee Voices</h4>
+                                    <div className="space-y-3">
+                                        {report.reviews.employeeVoices.map((voice, i) => (
+                                            <div key={i} className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                                <p className="text-xs text-slate-400 italic mb-2">"{voice.quote}"</p>
+                                                <div className="flex justify-between items-center text-[10px] text-slate-500 uppercase font-bold">
+                                                    <span>{voice.source}</span>
+                                                    <span className={
+                                                        voice.sentiment === 'Positive' ? 'text-emerald-500' : 
+                                                        voice.sentiment === 'Negative' ? 'text-rose-500' : 'text-amber-500'
+                                                    }>{voice.sentiment}</span>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
-
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <LinkIcon size={16} /> Sources
-                                </h4>
-                                <ul className="space-y-2">
-                                    {researchState.report.sources.map((source, i) => (
-                                        <li key={i}>
-                                            <a 
-                                                href={source.url} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer"
-                                                className="text-xs text-indigo-400 hover:text-indigo-300 truncate block hover:underline"
-                                            >
-                                                {source.title}
-                                            </a>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        </div>
+                        )}
                     </div>
-                </div>
-            )}
-        </div>
-    );
+                 </div>
+              ) : (
+                 <div className="h-full border-2 border-dashed border-slate-800 rounded-2xl flex flex-col items-center justify-center text-slate-600 p-8 text-center bg-slate-900/20">
+                    <Telescope size={64} className="mb-4 opacity-50" />
+                    <h3 className="text-xl font-bold text-slate-500">No Intelligence Data</h3>
+                    <p className="text-sm text-slate-600 max-w-sm mt-2">Enter a company and role on the left to deploy the deep research agent.</p>
+                 </div>
+              )}
+          </div>
+       </div>
+    </div>
+  );
 };
 
 export default AgentsDashboard;

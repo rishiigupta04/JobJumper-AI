@@ -1,4 +1,5 @@
 
+
 export type JobStatus = 'Applied' | 'Interview' | 'Offer' | 'Rejected' | 'Accepted';
 
 export interface Attachment {
@@ -120,7 +121,15 @@ export interface ResearchReport {
   company: string;
   role: string;
   date: string;
-  content: string; // Markdown content
+  content: string; // JSON content
+}
+
+export interface InterviewPrepReport {
+  id: string;
+  company: string;
+  role: string;
+  date: string;
+  content: string; // JSON content
 }
 
 export type ViewState = 'dashboard' | 'applications' | 'offers' | 'resume' | 'avatar' | 'schedule' | 'settings' | 'chat' | 'agents';

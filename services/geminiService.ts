@@ -1,10 +1,28 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Resume, ChatMessage } from "../types";
 
-// Access process.env.API_KEY directly so Vite can replace it at build time.
-// Do not wrap in 'typeof process' checks as they fail in the browser.
+// Access process.env.API_KEY directly
 const getApiKey = () => {
   return process.env.API_KEY || '';
+};
+
+// --- DATA SANITIZATION HELPERS (Prevents React Error #31) ---
+
+const ensureString = (val: any): string => {
+  if (val === null || val === undefined) return "";
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  if (Array.isArray(val)) return val.map(item => ensureString(item)).join(' ');
+  if (typeof val === 'object') {
+    return val.text || val.value || val.description || JSON.stringify(val);
+  }
+  return String(val);
+};
+
+const ensureStringArray = (arr: any): string[] => {
+  if (!Array.isArray(arr)) return [];
+  return arr.map(item => ensureString(item));
 };
 
 // Helper to extract clean base64 and mimeType
@@ -16,33 +34,22 @@ const parseDataUrl = (dataUrl: string) => {
   return { mimeType: 'image/jpeg', data: dataUrl.replace(/^data:image\/\w+;base64,/, "") };
 };
 
-// Helper to truncate long strings to prevent excessive token usage
-// TIGHTENED LIMITS for Flash model
 const truncateString = (str: string, maxLength: number) => {
   if (!str) return "";
   return str.length > maxLength ? str.substring(0, maxLength) + "...(truncated)" : str;
 };
 
-// Helper: Clean response but PRESERVE bold markdown (**) for highlighting
 const cleanAIResponse = (text: string): string => {
   if (!text) return "";
-  
-  // Remove conversational prefixes that Gemini sometimes adds
   let cleaned = text.replace(/^(Here is|Sure,|I have rewritten|The improved version|Here's the|Below is).*?:/i, "").trim();
-
-  // Remove Markdown italics only (*text* or _text_), PRESERVE BOLD (**text**)
   cleaned = cleaned
-    .replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, "$1") // Remove single * italics
+    .replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, "$1") 
     .replace(/__(.*?)__/g, "$1")
     .replace(/_(.*?)_/g, "$1");
-
-  // Normalize bullet points: convert '*' or '-' at start of lines to '•'
   cleaned = cleaned.replace(/^\s*[\-\*]\s/gm, "• ");
-  
   return cleaned.trim();
 };
 
-// Recursive helper to clean strings in an object
 const traverseAndClean = (obj: any): any => {
   if (typeof obj === 'string') return cleanAIResponse(obj);
   if (Array.isArray(obj)) return obj.map(traverseAndClean);
@@ -56,11 +63,9 @@ const traverseAndClean = (obj: any): any => {
   return obj;
 };
 
-// Helper to normalize resume JSON (specifically converting array descriptions to strings)
 const normalizeResumeJSON = (data: any): any => {
   const normalizeDescription = (desc: any) => {
     if (Array.isArray(desc)) {
-      // If description is an array, join it with newlines and ensure bullets
       return desc.map(line => String(line).trim().startsWith('•') ? line : `• ${line}`).join('\n');
     }
     return desc;
@@ -93,24 +98,7 @@ export const scoreResume = async (resume: Resume, jobDescription: string): Promi
   const ai = new GoogleGenAI({ apiKey });
 
   try {
-    const prompt = `
-    Act as a strict Technical Recruiter and Hiring Manager. 
-    Rigorously score the provided Resume against the Job Description (JD).
-
-    Job Description:
-    "${truncateString(jobDescription, 2000)}"
-
-    Resume:
-    ${JSON.stringify(resume)}
-
-    Analysis Requirements:
-    1. **Score**: 0-100 based on keyword matching, experience level, and skills alignment. Be realistic (e.g., if key skills are missing, score lower).
-    2. **Summary**: One punchy sentence summarizing the match.
-    3. **Strengths**: Top 3 matching skills/experiences.
-    4. **Gaps**: Top 3 missing requirements or weak points.
-    5. **Recommendations**: 2-3 specific, actionable tweaks to improve the score.
-    `;
-
+    const prompt = `Act as a strict Technical Recruiter. Score the Resume against the JD.\nJD: "${truncateString(jobDescription, 2000)}"\nResume: ${JSON.stringify(resume)}`;
     const schema: Schema = {
       type: Type.OBJECT,
       properties: {
@@ -126,200 +114,72 @@ export const scoreResume = async (resume: Resume, jobDescription: string): Promi
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [{ parts: [{ text: prompt }] }],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: schema
-      }
+      config: { responseMimeType: 'application/json', responseSchema: schema }
     });
 
-    const text = response.text;
-    if (!text) throw new Error("No response");
-
-    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleanText) as ResumeScore;
-
+    const parsed = JSON.parse(response.text || "{}");
+    return {
+      score: typeof parsed.score === 'number' ? parsed.score : 0,
+      summary: ensureString(parsed.summary),
+      strengths: ensureStringArray(parsed.strengths),
+      gaps: ensureStringArray(parsed.gaps),
+      recommendations: ensureStringArray(parsed.recommendations),
+    };
   } catch (error) {
-    console.error("Gemini Score Resume Error:", error);
+    console.error("Score Error:", error);
     throw error;
   }
 };
 
-export const generateCoverLetter = async (
-  jobRole: string,
-  company: string,
-  userSkills: string,
-  jobDescription?: string
-): Promise<string> => {
-  const apiKey = getApiKey();
-  if (!apiKey) return "Error: API Key is missing. Please check your configuration.";
-  const ai = new GoogleGenAI({ apiKey });
-
-  try {
-    const prompt = `Write a passionate and professional cover letter for the role of ${jobRole} at ${company}. 
-    My key skills are: ${userSkills}. 
-    ${jobDescription ? `Here is the job description for context: ${truncateString(jobDescription, 1500)}` : ''}
-    Keep it concise (under 300 words), engaging, and persuasive. Format it ready to copy-paste.
-    Return ONLY the cover letter text. Do not include headers like "Subject:" or placeholders unless necessary.`;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-
-    return cleanAIResponse(response.text || "Failed to generate cover letter.");
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    return "An error occurred while generating the cover letter. Please try again.";
-  }
-};
-
-export const generateInterviewGuide = async (
-  jobRole: string,
-  company: string,
-  description: string
-): Promise<string> => {
+export const generateCoverLetter = async (jobRole: string, company: string, userSkills: string, jobDescription?: string): Promise<string> => {
   const apiKey = getApiKey();
   if (!apiKey) return "Error: API Key is missing.";
   const ai = new GoogleGenAI({ apiKey });
-
   try {
-    const prompt = `
-      Act as a world-class technical career coach. Create a STRATEGIC INTERVIEW PREP GUIDE for the role of ${jobRole} at ${company}.
-      
-      Context from Job Description:
-      "${description ? truncateString(description, 2000) : 'No description provided.'}"
-
-      Produce the output in clean, structured Markdown. Use standard headings (##, ###) and lists.
-      
-      Structure the response exactly like this:
-
-      ## 🧠 Mental Model & Core Focus
-      A brief 2-sentence summary of the "persona" the candidate should adopt for this specific role (e.g., "The Proactive Problem Solver").
-
-      ## ⚡ Key Technical Refreshers
-      Identify 3-4 specific concepts or technologies from the JD that are critical.
-      *   **Concept Name**: One sentence refresher or key talking point.
-
-      ## ❓ Top Anticipated Questions
-      Provide 3 high-probability questions (mix of technical and behavioral).
-      
-      ### Q1: [Question text]
-      *   **Why they ask**: [Brief reason]
-      *   **Key points to hit**: [Bullet points]
-
-      ### Q2: [Question text]
-      *   **Why they ask**: [Brief reason]
-      *   **Key points to hit**: [Bullet points]
-
-      ### Q3: [Question text]
-      *   **Why they ask**: [Brief reason]
-      *   **Key points to hit**: [Bullet points]
-
-      ## 🚀 "Power" Questions to Ask Them
-      List 3 questions the candidate should ask the interviewer to show deep insight.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-
-    return response.text || "Failed to generate interview guide.";
+    const prompt = `Write a professional cover letter for ${jobRole} at ${company}. My skills: ${userSkills}. ${jobDescription ? `JD: ${truncateString(jobDescription, 1500)}` : ''}`;
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    return cleanAIResponse(response.text || "Failed to generate.");
   } catch (error) {
-    console.error("Gemini Interview Guide Error:", error);
-    return "An error occurred while creating the interview guide.";
+    return "An error occurred.";
   }
 };
 
-export const generateNegotiationStrategy = async (
-  jobRole: string,
-  company: string,
-  salary: string,
-  description: string
-): Promise<string> => {
+export const generateInterviewGuide = async (jobRole: string, company: string, description: string): Promise<string> => {
   const apiKey = getApiKey();
   if (!apiKey) return "Error: API Key is missing.";
   const ai = new GoogleGenAI({ apiKey });
-
   try {
-    const prompt = `
-      Act as a high-stakes salary negotiation coach. I have an offer for ${jobRole} at ${company}.
-      Salary/Package offered: ${salary}
-      
-      Job Context:
-      "${description ? truncateString(description, 1000) : 'No description provided.'}"
-      
-      Provide a strategic plan in Markdown. Use clear headings.
-
-      ## 📊 Market Analysis
-      *   **Role Value**: Estimate the market perception of this role.
-      *   **Leverage Points**: List 2 specific items from the JD or role type that give the candidate bargaining power.
-
-      ## 💬 The Negotiation Script
-      Write a specific script for the "Ask".
-      > "[Insert polite but firm script here...]"
-
-      ## 🎁 Plan B: The Perks
-      If base salary is capped, list 3 specific non-monetary terms to ask for (e.g., Sign-on, Equity, Remote days).
-
-      ## ⛔ What NOT to Say
-      *   [Avoid saying this]
-      *   [Avoid saying this]
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-
-    return response.text || "Failed to generate negotiation strategy.";
+    const prompt = `Create a strategic interview prep guide for ${jobRole} at ${company}.\nJD: "${truncateString(description, 2000)}"`;
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    return response.text || "Failed to generate.";
   } catch (error) {
-    console.error("Gemini Negotiation Error:", error);
-    return "An error occurred while analyzing the offer.";
+    return "An error occurred.";
   }
 };
 
-export const enhanceResumeText = async (
-  text: string,
-  type: 'summary' | 'experience' | 'project'
-): Promise<string> => {
+export const generateNegotiationStrategy = async (jobRole: string, company: string, salary: string, description: string): Promise<string> => {
   const apiKey = getApiKey();
   if (!apiKey) return "Error: API Key is missing.";
   const ai = new GoogleGenAI({ apiKey });
-  
+  try {
+    const prompt = `Create a salary negotiation strategy for ${jobRole} at ${company}. Offer: ${salary}.\nJD: "${truncateString(description, 1000)}"`;
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    return response.text || "Failed to generate.";
+  } catch (error) {
+    return "An error occurred.";
+  }
+};
+
+export const enhanceResumeText = async (text: string, type: 'summary' | 'experience' | 'project'): Promise<string> => {
+  const apiKey = getApiKey();
+  if (!apiKey) return "";
+  const ai = new GoogleGenAI({ apiKey });
   if (!text) return "";
-
   try {
-    let specificInstruction = "";
-    if (type === 'summary') {
-      specificInstruction = "Rewrite this professional summary to be more impactful, concise, and results-oriented. Highlight 3-4 key hard skills or achievements using **bold** markdown.";
-    } else if (type === 'project') {
-      specificInstruction = "Rewrite this project description to be exactly 2-3 bullet points. Each bullet should be detailed (2-3 lines). Highlight the 1-2 most important technologies or results in each bullet using **bold** markdown.";
-    } else {
-      specificInstruction = "Rewrite this experience description to be exactly 2-3 bullet points. Each bullet should be detailed (2-3 lines) using strong action verbs. Highlight the 1-2 most important metrics or skills in each bullet using **bold** markdown.";
-    }
-
-    const prompt = `
-      ${specificInstruction}
-      
-      Original Text:
-      "${truncateString(text, 1000)}"
-      
-      STRICT OUTPUT RULES:
-      1. Return ONLY the rewritten text. 
-      2. Use **bold** syntax for important keywords (e.g. **React**, **increased revenue by 20%**).
-      3. Do NOT include any intro like "Here is the rewritten text:".
-      4. Use standard bullet points (•) if a list is needed.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-
+    const prompt = `Rewrite this resume ${type} to be more professional: "${truncateString(text, 1000)}"`;
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
     return cleanAIResponse(response.text || text);
   } catch (error) {
-    console.error("Gemini API Error:", error);
     return text;
   }
 };
@@ -328,147 +188,19 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
   const ai = new GoogleGenAI({ apiKey });
-
   try {
-    // Construct a safe, HEAVILY truncated version of the resume to send to the AI
-    // Gemini Flash has lower output limits, so we must reduce input complexity
-    const cleanResume = {
-        fullName: currentResume.fullName || "",
-        email: currentResume.email || "",
-        phone: currentResume.phone || "",
-        linkedin: currentResume.linkedin || "",
-        location: currentResume.location || "",
-        summary: truncateString(currentResume.summary || "", 800),
-        skills: truncateString(currentResume.skills || "", 800),
-        jobTitle: currentResume.jobTitle || "",
-        experience: (currentResume.experience || []).map(e => ({
-            id: e.id,
-            role: e.role,
-            company: e.company,
-            startDate: e.startDate,
-            endDate: e.endDate,
-            description: truncateString(e.description || "", 800) // Reduced from 1500
-        })),
-        projects: (currentResume.projects || []).map(p => ({
-            id: p.id,
-            name: p.name,
-            technologies: p.technologies,
-            link: p.link,
-            description: truncateString(p.description || "", 500) // Reduced from 1000
-        })),
-        education: (currentResume.education || []).map(e => ({
-            id: e.id,
-            degree: e.degree,
-            school: e.school,
-            year: e.year,
-            grade: e.grade
-        }))
-    };
-
-    const prompt = `
-    Act as a world-class executive resume writer. 
-    Rewrite the content of the provided resume JSON to be highly professional, impactful, and ATS-friendly.
-    
-    Specific Instructions:
-    1. **Summary**: Create a compelling narrative. Highlight 3-4 top skills using **bold**.
-    2. **Experience**: Convert descriptions into exactly 2-3 bullet points per role. Each bullet should be detailed (2-3 lines). Highlight key metrics and tools using **bold**.
-    3. **Projects**: Exactly 2-3 bullet points per project. Highlight tech stack and results using **bold**.
-    4. **Skills**: Format skills with vertical bars (|) separator.
-    5. **Formatting**: Use **bold** markdown syntax for important keywords. Do NOT use italics.
-    6. **Structure**: Keep the exact same JSON structure. **PRESERVE ALL 'id' fields exactly.**
-    7. **Cleanliness**: Do not add conversational text. Return only the JSON.
-    
-    Resume JSON:
-    ${JSON.stringify(cleanResume)}
-    `;
-
-    const schema: Schema = {
-      type: Type.OBJECT,
-      properties: {
-        fullName: { type: Type.STRING },
-        email: { type: Type.STRING },
-        phone: { type: Type.STRING },
-        linkedin: { type: Type.STRING },
-        location: { type: Type.STRING },
-        summary: { type: Type.STRING },
-        skills: { type: Type.STRING },
-        jobTitle: { type: Type.STRING },
-        experience: { 
-          type: Type.ARRAY, 
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              role: { type: Type.STRING },
-              company: { type: Type.STRING },
-              startDate: { type: Type.STRING },
-              endDate: { type: Type.STRING },
-              description: { type: Type.STRING }
-            }
-          }
-        },
-        projects: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              technologies: { type: Type.STRING },
-              link: { type: Type.STRING },
-              description: { type: Type.STRING }
-            }
-          }
-        },
-        education: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              degree: { type: Type.STRING },
-              school: { type: Type.STRING },
-              year: { type: Type.STRING },
-              grade: { type: Type.STRING }
-            }
-          }
-        }
-      }
-    };
-
-    // Switched back to Gemini 2.5 Flash as requested.
-    // Lower temperature helps ensure the model focuses on completing the JSON rather than being creative.
+    const cleanInput = JSON.stringify({ ...currentResume, avatarImage: undefined });
+    const prompt = `Rewrite the resume content to be professional and impactful. Return ONLY JSON.\n${cleanInput}`;
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [{ parts: [{ text: prompt }] }],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: schema,
-        temperature: 0.3,
-      }
+      config: { responseMimeType: 'application/json' }
     });
-
-    const text = response.text;
-    if (!text) throw new Error("No response generated");
-
-    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    // Robust Error Handling for Truncated JSON
-    try {
-        const parsed = JSON.parse(cleanText);
-        // Clean text and normalize structure (e.g. array descriptions to string)
-        const cleaned = traverseAndClean(parsed);
-        return normalizeResumeJSON(cleaned);
-    } catch (parseError) {
-        console.error("JSON Parse Error (likely truncation):", parseError);
-        console.log("Raw Text was:", cleanText);
-        // Throw a specific error that the UI can catch
-        throw new Error("The resume is too long for the AI to process in one go. Please try polishing individual sections instead.");
-    }
-
+    const parsed = JSON.parse(response.text || "{}");
+    const cleaned = traverseAndClean(parsed);
+    return normalizeResumeJSON(cleaned);
   } catch (error) {
-    console.error("Gemini Full Enhancement Error:", error);
-    throw error;
+    throw new Error("The resume is too long for the AI to process in one go.");
   }
 };
 
@@ -476,191 +208,37 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
   const ai = new GoogleGenAI({ apiKey });
-
   try {
-    const cleanResume = {
-        fullName: currentResume.fullName || "",
-        email: currentResume.email || "",
-        phone: currentResume.phone || "",
-        linkedin: currentResume.linkedin || "",
-        location: currentResume.location || "",
-        summary: truncateString(currentResume.summary || "", 800),
-        skills: truncateString(currentResume.skills || "", 800),
-        jobTitle: currentResume.jobTitle || "",
-        experience: (currentResume.experience || []).map(e => ({
-            id: e.id,
-            role: e.role,
-            company: e.company,
-            startDate: e.startDate,
-            endDate: e.endDate,
-            description: truncateString(e.description || "", 800)
-        })),
-        projects: (currentResume.projects || []).map(p => ({
-            id: p.id,
-            name: p.name,
-            technologies: p.technologies,
-            link: p.link,
-            description: truncateString(p.description || "", 500)
-        })),
-        education: (currentResume.education || []).map(e => ({
-            id: e.id,
-            degree: e.degree,
-            school: e.school,
-            year: e.year,
-            grade: e.grade
-        }))
-    };
-
-    const prompt = `
-    Act as an expert ATS (Applicant Tracking System) optimizer.
-    Tailor this Resume JSON to match the provided Job Description (JD).
-    
-    Job Description:
-    "${truncateString(jobDescription, 3000)}"
-
-    Instructions:
-    1. **Analyze JD**: Identify 5-7 critical keywords from the JD.
-    2. **Rewrite Content**: Optimize 'summary', 'experience', and 'projects'.
-    3. **Highlighting**: **Bold** the 5-7 critical JD keywords wherever they appear in the new text to show alignment.
-    4. **Detail**: Ensure 'experience' and 'projects' descriptions have exactly 2-3 detailed bullet points.
-    5. **Skills**: Format skills with vertical bars (|).
-    6. **Structure**: Return the EXACT same JSON structure. Preserve IDs.
-    
-    Resume JSON:
-    ${JSON.stringify(cleanResume)}
-    `;
-
-    // Reuse similar schema as enhanceFullResume
-    const schema: Schema = {
-      type: Type.OBJECT,
-      properties: {
-        fullName: { type: Type.STRING },
-        email: { type: Type.STRING },
-        phone: { type: Type.STRING },
-        linkedin: { type: Type.STRING },
-        location: { type: Type.STRING },
-        summary: { type: Type.STRING },
-        skills: { type: Type.STRING },
-        jobTitle: { type: Type.STRING },
-        experience: { 
-          type: Type.ARRAY, 
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              role: { type: Type.STRING },
-              company: { type: Type.STRING },
-              startDate: { type: Type.STRING },
-              endDate: { type: Type.STRING },
-              description: { type: Type.STRING }
-            }
-          }
-        },
-        projects: {
-          type: Type.ARRAY, 
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              technologies: { type: Type.STRING },
-              link: { type: Type.STRING },
-              description: { type: Type.STRING }
-            }
-          }
-        },
-        education: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              degree: { type: Type.STRING },
-              school: { type: Type.STRING },
-              year: { type: Type.STRING },
-              grade: { type: Type.STRING }
-            }
-          }
-        }
-      }
-    };
-
-    // Switched back to Gemini 2.5 Flash
+    const prompt = `Tailor this resume to the JD below. Return ONLY JSON.\nResume: ${JSON.stringify({ ...currentResume, avatarImage: undefined })}\nJD: ${truncateString(jobDescription, 3000)}`;
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [{ parts: [{ text: prompt }] }],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: schema,
-        temperature: 0.3
-      }
+      config: { responseMimeType: 'application/json' }
     });
-
-    const text = response.text;
-    if (!text) throw new Error("No response");
-
-    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    // Robust Error Handling for Truncated JSON
-    try {
-        const parsed = JSON.parse(cleanText);
-        // Clean text and normalize structure
-        const cleaned = traverseAndClean(parsed);
-        return normalizeResumeJSON(cleaned);
-    } catch (parseError) {
-        console.error("JSON Parse Error (likely truncation):", parseError);
-        throw new Error("The tailored resume was too large to process. Try reducing the length of your resume or JD.");
-    }
-
+    const parsed = JSON.parse(response.text || "{}");
+    const cleaned = traverseAndClean(parsed);
+    return normalizeResumeJSON(cleaned);
   } catch (error) {
-    console.error("Gemini Tailor Resume Error:", error);
-    throw error;
+    throw new Error("The tailored resume was too large to process.");
   }
 };
 
-export const generateAvatar = async (
-  imageBase64: string,
-  stylePrompt: string
-): Promise<string> => {
+export const generateAvatar = async (imageBase64: string, stylePrompt: string): Promise<string> => {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
   const ai = new GoogleGenAI({ apiKey });
-
   try {
     const { mimeType, data } = parseDataUrl(imageBase64);
-    
-    const prompt = `Transform this portrait into a high-quality professional corporate headshot.
-    Style requirements: ${stylePrompt}. 
-    Maintain the person's identity and facial features, but improve the lighting to be studio quality, ensure neutral professional background, and attire to be strictly professional business wear. 
-    Output ONLY the image.`;
-
+    const prompt = `Transform this portrait into a high-quality professional corporate headshot. Style: ${stylePrompt}.`;
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              data: data,
-              mimeType: mimeType,
-            },
-          },
-          {
-            text: prompt,
-          },
-        ],
-      },
-      // Note: Do NOT set responseMimeType or responseSchema for image generation models
+      contents: { parts: [{ inlineData: { data: data, mimeType: mimeType } }, { text: prompt }] }
     });
-
     for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
+      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
-    
-    throw new Error("No image generated by the model.");
+    throw new Error("No image generated.");
   } catch (error) {
-    console.error("Gemini Avatar Error:", error);
     throw error;
   }
 };
@@ -669,644 +247,475 @@ export const parseResumeFromDocument = async (fileBase64: string): Promise<Parti
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
   const ai = new GoogleGenAI({ apiKey });
-
   try {
     const { mimeType, data } = parseDataUrl(fileBase64);
-    
-    const prompt = `Analyze this resume document. Extract structured data into JSON matching the schema below.
-    
-    FORMATTING RULES:
-    1. **Skills**: Must be a single string with skills separated by vertical bars (|). Example: "React | Node.js | TypeScript".
-    2. **Descriptions** (Experience & Projects): Must be a string with bullet points. Use "• " for each bullet. 
-       Example: "• Developed X.\n• Achieved Y."
-    3. **General**: Plain text only. No markdown formatting in values (no bold, no italics).
-    
-    Return ONLY the raw JSON string.`;
-
-    const schema: Schema = {
-      type: Type.OBJECT,
-      properties: {
-        fullName: { type: Type.STRING },
-        email: { type: Type.STRING },
-        phone: { type: Type.STRING },
-        linkedin: { type: Type.STRING },
-        location: { type: Type.STRING },
-        summary: { type: Type.STRING },
-        skills: { type: Type.STRING },
-        experience: { 
-          type: Type.ARRAY, 
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              role: { type: Type.STRING },
-              company: { type: Type.STRING },
-              startDate: { type: Type.STRING },
-              endDate: { type: Type.STRING },
-              description: { type: Type.STRING }
-            }
-          }
-        },
-        projects: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              technologies: { type: Type.STRING },
-              link: { type: Type.STRING },
-              description: { type: Type.STRING }
-            }
-          }
-        },
-        education: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              degree: { type: Type.STRING },
-              school: { type: Type.STRING },
-              year: { type: Type.STRING },
-              grade: { type: Type.STRING }
-            }
-          }
-        }
-      }
-    };
-
+    const prompt = `Analyze this resume and extract into JSON. Use vertical bars for skills.`;
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: {
-        parts: [
-          {
-             inlineData: {
-               data: data,
-               mimeType: mimeType,
-             }
-          },
-          { text: prompt }
-        ]
-      },
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: schema
-      }
+      contents: { parts: [{ inlineData: { data: data, mimeType: mimeType } }, { text: prompt }] },
+      config: { responseMimeType: 'application/json' }
     });
-
-    const text = response.text;
-    if (!text) throw new Error("No response from model");
-
-    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(cleanText);
-    
-    // Clean text and normalize structure
+    const parsed = JSON.parse(response.text || "{}");
     const cleaned = traverseAndClean(parsed);
     return normalizeResumeJSON(cleaned);
-
   } catch (error) {
-    console.error("Gemini Parse Resume Error:", error);
     throw error;
   }
 };
 
-export const chatWithChatur = async (
-  history: ChatMessage[], 
-  userMessage: string,
-  contextData: any
-): Promise<string> => {
+export const chatWithChatur = async (history: ChatMessage[], userMessage: string, contextData: any): Promise<string> => {
   const apiKey = getApiKey();
-  if (!apiKey) return "I'm having trouble connecting to my brain right now. Please check your API key.";
+  if (!apiKey) return "API key missing.";
   const ai = new GoogleGenAI({ apiKey });
-
   try {
-    const systemInstruction = `You are Chatur, an expert AI Career Coach embedded in the application "JobJumper AI".
-    
-    Current Date: ${contextData.currentDate}
-    
-    USER PROFILE:
-    Name: ${contextData.userProfile.name}
-    Target Role: ${contextData.userProfile.title}
-    Skills: ${contextData.userProfile.skills}
-    Summary: ${contextData.userProfile.summary}
-    Experience: ${JSON.stringify(contextData.userProfile.experience)}
-    Projects: ${JSON.stringify(contextData.userProfile.projects)}
-    Education: ${JSON.stringify(contextData.userProfile.education)}
-    
-    APPLICATION DATA:
-    Total Applications: ${contextData.stats.total}
-    Interviews Pending: ${contextData.stats.interview}
-    Offers: ${contextData.stats.offer}
-
-    ========================================
-    ACTIVE OFFERS & NEGOTIATIONS (HIGH PRIORITY)
-    ========================================
-    ${JSON.stringify(contextData.offers)}
-    
-    JOB LIST (All Applications):
-    ${JSON.stringify(contextData.jobs)}
-    
-    YOUR MISSION:
-    1. Help the user land a job by providing strategic advice, interview prep, and motivation.
-    2. Review the user's resume content (Experience, Projects) provided above to give specific feedback if asked.
-
-    STRICT CONTEXT RULES (DO NOT VIOLATE):
-    - **Differentiation**: The user has multiple applications (e.g., Google, Netflix, Amazon). When the user asks a question, determine exactly which company they are referring to. 
-    - **Ambiguity Check**: If the user asks "How is *the* interview prep going?" or "What should I ask *them*?" and has multiple upcoming interviews, YOU MUST ASK: "Which company are you referring to? [Company A] or [Company B]?" Do NOT guess.
-    - **Data Isolation**: Never mix data. Do not use the negotiation strategy for Netflix when talking about the Google interview. Do not mention Amazon's salary when analyzing OpenAI's job description.
-    - **Active Offers**: If the user asks about an offer, look specifically at the 'ACTIVE OFFERS' section. Use the 'negotiationStrategy' and 'salary' fields provided there.
-    - **Data Fidelity**: Do not hallucinate job details. Only use the provided JSON data. If information (like salary) is missing, ask the user for it.
-    
-    TONE:
-    - Professional, encouraging, and highly specific.
-    - Concise and actionable.
-    `;
-
-    // Convert history to API format
-    const contents = history.map(msg => ({
-      role: msg.role,
-      parts: [{ text: msg.text }]
-    }));
-
-    // Add current user message
-    contents.push({
-      role: 'user',
-      parts: [{ text: userMessage }]
-    });
-
+    const systemInstruction = `You are Chatur, an expert AI Career Coach. Date: ${contextData.currentDate}`;
+    const contents = history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
+    contents.push({ role: 'user', parts: [{ text: userMessage }] });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: contents,
-      config: {
-        systemInstruction: systemInstruction,
-      }
+      config: { systemInstruction }
     });
-
-    return response.text || "I didn't catch that. Could you say it again?";
+    return response.text || "I didn't catch that.";
   } catch (error) {
-    console.error("Chatur Error:", error);
-    return "I'm feeling a bit overwhelmed. Let's try again in a moment.";
+    return "Error occurred.";
   }
 };
 
 // --- AGENT MODE FUNCTIONS ---
 
 export interface AnalyzerResult {
-  keyInfo: {
-    company: string;
-    role: string;
-    location: string;
-    salary: string;
-    experience: string;
-    workMode: string;
-  };
-  skills: {
-    technical: { name: string; status: 'matched' | 'missing' }[];
-    soft: string[];
-    niceToHave: string[];
-  };
-  matchAnalysis: {
-    overallScore: number;
-    technicalMatch: { score: number; reason: string };
-    experienceMatch: { score: number; reason: string };
-    roleMatch: { score: number; reason: string };
-  };
+  keyInfo: { company: string; role: string; location: string; salary: string; experience: string; workMode: string; };
+  skills: { technical: { name: string; status: 'matched' | 'missing' }[]; soft: string[]; niceToHave: string[]; };
+  matchAnalysis: { overallScore: number; technicalMatch: { score: number; reason: string }; experienceMatch: { score: number; reason: string }; roleMatch: { score: number; reason: string }; };
   redFlags: string[];
-  competitiveAnalysis: {
-    level: string; // 'Low' | 'Medium' | 'High'
-    poolSize: string;
-    differentiators: string[];
-  };
-  recommendation: {
-    status: string; // 'Strong Apply' | 'Conditional Apply' | 'Skip'
-    reason: string;
-  };
+  competitiveAnalysis: { level: string; poolSize: string; differentiators: string[]; };
+  recommendation: { status: string; reason: string; };
 }
 
 export const runAgentAnalyzer = async (jobDescription: string, resume: Resume): Promise<AnalyzerResult> => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key is missing.");
   const ai = new GoogleGenAI({ apiKey });
-
-  const prompt = `
-    You are an expert technical recruiter and job market analyst. Compare the provided Candidate Resume against the Job Description (JD).
-
-    CANDIDATE RESUME JSON:
-    ${JSON.stringify(resume)}
-
-    JOB DESCRIPTION:
-    ${jobDescription.substring(0, 5000)}
-
-    Analyze the job description and candidate fit deeply. Return a strictly structured JSON response.
-
-    GUIDELINES:
-    1. **Key Info Extraction**: Extract explicit details from the JD. If not mentioned, use "Not specified".
-    2. **Skill Matching**: 
-       - List all technical skills mentioned in the JD.
-       - For EACH skill, check if it is present in the Candidate Resume JSON (look in 'skills', 'experience', 'projects', 'summary').
-       - If present: status = 'matched'
-       - If missing: status = 'missing'
-    3. **Scoring**:
-       - Overall: Weighted average (Tech 50%, Exp 30%, Role 20%).
-       - Tech Match: Hard skills overlap.
-       - Exp Match: Years of experience & seniority alignment.
-       - Role Match: Industry/Domain relevance.
-    4. **Red Flags**: Look for "unicorn" requirements, vague terms, or bad WLB indicators.
-    5. **Competitive Analysis**: Estimate how hard it is to get this role based on market trends.
-    6. **Recommendation**: Be decisive. 
-       - "Strong Apply" if score > 80.
-       - "Conditional Apply" if score 50-79.
-       - "Skip" if score < 50 or major red flags.
+  
+  const schemaDescription = `
+  {
+    "keyInfo": { 
+      "company": "string", 
+      "role": "string", 
+      "location": "string", 
+      "salary": "string", 
+      "experience": "string", 
+      "workMode": "string" 
+    },
+    "skills": { 
+      "technical": [{ "name": "string", "status": "matched" | "missing" }], 
+      "soft": ["string"], 
+      "niceToHave": ["string"] 
+    },
+    "matchAnalysis": { 
+      "overallScore": number, 
+      "technicalMatch": { "score": number, "reason": "string" }, 
+      "experienceMatch": { "score": number, "reason": "string" }, 
+      "roleMatch": { "score": number, "reason": "string" } 
+    },
+    "redFlags": ["string"],
+    "competitiveAnalysis": { 
+      "level": "High/Medium/Low", 
+      "poolSize": "string", 
+      "differentiators": ["string"] 
+    },
+    "recommendation": { 
+      "status": "Strong Apply" | "Conditional Apply" | "Avoid", 
+      "reason": "string" 
+    }
+  }
   `;
 
-  const schema: Schema = {
-    type: Type.OBJECT,
-    properties: {
+  const prompt = `Analyze the fit between the Candidate Resume and the Job Description (JD).
+  
+  RESUME:
+  ${JSON.stringify({ ...resume, avatarImage: undefined })}
+  
+  JOB DESCRIPTION:
+  ${jobDescription.substring(0, 5000)}
+  
+  INSTRUCTIONS:
+  1. Act as a strict Technical Recruiter.
+  2. Analyze technical skills, experience alignment, and role fit.
+  3. Identify any red flags or deal-breakers.
+  4. Estimate the competitive landscape.
+  
+  OUTPUT FORMAT:
+  Return a STRICT JSON object matching exactly this structure:
+  ${schemaDescription}
+  
+  IMPORTANT: Return ONLY the raw JSON string. Do not use markdown code blocks (no \`\`\`json).`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+
+    let jsonStr = response.text || "{}";
+    jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
+    
+    const start = jsonStr.indexOf('{');
+    const end = jsonStr.lastIndexOf('}');
+    if (start !== -1 && end !== -1) {
+      jsonStr = jsonStr.substring(start, end + 1);
+    }
+
+    const parsed = JSON.parse(jsonStr);
+    
+    // Strict Validation
+    return {
       keyInfo: {
-        type: Type.OBJECT,
-        properties: {
-          company: { type: Type.STRING },
-          role: { type: Type.STRING },
-          location: { type: Type.STRING },
-          salary: { type: Type.STRING },
-          experience: { type: Type.STRING },
-          workMode: { type: Type.STRING }
-        },
-        required: ["company", "role", "location", "salary", "experience", "workMode"]
+        company: ensureString(parsed.keyInfo?.company),
+        role: ensureString(parsed.keyInfo?.role),
+        location: ensureString(parsed.keyInfo?.location),
+        salary: ensureString(parsed.keyInfo?.salary),
+        experience: ensureString(parsed.keyInfo?.experience),
+        workMode: ensureString(parsed.keyInfo?.workMode),
       },
       skills: {
-        type: Type.OBJECT,
-        properties: {
-          technical: { 
-            type: Type.ARRAY, 
-            items: { 
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING },
-                status: { type: Type.STRING, enum: ['matched', 'missing'] }
-              },
-              required: ['name', 'status']
-            } 
-          },
-          soft: { type: Type.ARRAY, items: { type: Type.STRING } },
-          niceToHave: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["technical", "soft", "niceToHave"]
+        technical: (parsed.skills?.technical || []).map((s: any) => ({
+          name: ensureString(s.name),
+          status: (s.status === 'matched' || s.status === 'missing') ? s.status : 'missing'
+        })),
+        soft: ensureStringArray(parsed.skills?.soft),
+        niceToHave: ensureStringArray(parsed.skills?.niceToHave),
       },
       matchAnalysis: {
-        type: Type.OBJECT,
-        properties: {
-          overallScore: { type: Type.NUMBER },
-          technicalMatch: { 
-            type: Type.OBJECT, 
-            properties: {
-              score: { type: Type.NUMBER },
-              reason: { type: Type.STRING }
-            },
-            required: ["score", "reason"]
-          },
-          experienceMatch: { 
-            type: Type.OBJECT, 
-            properties: {
-              score: { type: Type.NUMBER },
-              reason: { type: Type.STRING }
-            },
-            required: ["score", "reason"]
-          },
-          roleMatch: { 
-            type: Type.OBJECT, 
-            properties: {
-              score: { type: Type.NUMBER },
-              reason: { type: Type.STRING }
-            },
-            required: ["score", "reason"]
-          }
+        overallScore: typeof parsed.matchAnalysis?.overallScore === 'number' ? parsed.matchAnalysis.overallScore : 0,
+        technicalMatch: { 
+          score: typeof parsed.matchAnalysis?.technicalMatch?.score === 'number' ? parsed.matchAnalysis.technicalMatch.score : 0, 
+          reason: ensureString(parsed.matchAnalysis?.technicalMatch?.reason) 
         },
-        required: ["overallScore", "technicalMatch", "experienceMatch", "roleMatch"]
+        experienceMatch: { 
+          score: typeof parsed.matchAnalysis?.experienceMatch?.score === 'number' ? parsed.matchAnalysis.experienceMatch.score : 0, 
+          reason: ensureString(parsed.matchAnalysis?.experienceMatch?.reason) 
+        },
+        roleMatch: { 
+          score: typeof parsed.matchAnalysis?.roleMatch?.score === 'number' ? parsed.matchAnalysis.roleMatch.score : 0, 
+          reason: ensureString(parsed.matchAnalysis?.roleMatch?.reason) 
+        },
       },
-      redFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
+      redFlags: ensureStringArray(parsed.redFlags),
       competitiveAnalysis: {
-        type: Type.OBJECT,
-        properties: {
-          level: { type: Type.STRING, enum: ["Low", "Medium", "High"] },
-          poolSize: { type: Type.STRING },
-          differentiators: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["level", "poolSize", "differentiators"]
+        level: ensureString(parsed.competitiveAnalysis?.level),
+        poolSize: ensureString(parsed.competitiveAnalysis?.poolSize),
+        differentiators: ensureStringArray(parsed.competitiveAnalysis?.differentiators),
       },
       recommendation: {
-        type: Type.OBJECT,
-        properties: {
-          status: { type: Type.STRING, enum: ["Strong Apply", "Conditional Apply", "Skip"] },
-          reason: { type: Type.STRING }
-        },
-        required: ["status", "reason"]
+        status: ensureString(parsed.recommendation?.status),
+        reason: ensureString(parsed.recommendation?.reason),
       }
-    },
-    required: ["keyInfo", "skills", "matchAnalysis", "redFlags", "competitiveAnalysis", "recommendation"]
-  };
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: { 
-      responseMimeType: 'application/json',
-      responseSchema: schema
-    }
-  });
-
-  const text = response.text || "{}";
-  const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-  return JSON.parse(cleanText) as AnalyzerResult;
-};
-
-export const runAgentInterviewPrep = async (company: string, role: string, jd: string): Promise<string> => {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key is missing.");
-  const ai = new GoogleGenAI({ apiKey });
-
-  const prompt = `
-    You are an expert interview coach. Create a comprehensive interview preparation kit for this role:
-    Company: ${company}
-    Role: ${role}
-    Job Description: ${jd.substring(0, 3000)}
-    Provide:
-
-    Company Research Brief (2-3 paragraphs):
-
-    Recent news or developments
-    Company culture and values
-    Known interview style
-
-
-    Technical Interview Questions (10-15 questions):
-
-    Role-specific technical questions likely to be asked
-    For each question, provide a brief hint on how to approach it
-
-
-    Behavioral Interview Questions (5-8 questions):
-
-    Common behavioral questions for this role
-    For each, provide a STAR method framework answer template
-
-
-    Smart Questions to Ask (5 questions):
-
-    Thoughtful questions the candidate should ask the interviewer
-    Questions that show research and genuine interest
-
-    Keep answers concise and actionable.
-
-    Provide output in MARKDOWN format with these exact Level 1 headers:
-
-    # Company Research Brief
-    # Technical Interview Questions
-    # Behavioral Interview Questions
-    # Smart Questions to Ask
-  `;
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt
-  });
-  return response.text || "";
-};
-
-export const runAgentDocumentGen = async (
-  type: 'Cover Letter' | 'Resume Bullets' | 'LinkedIn Message', 
-  jd: string, 
-  background: string
-): Promise<string> => {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key is missing.");
-  const ai = new GoogleGenAI({ apiKey });
-
-  const prompt = `
-    You are an expert career document writer. Generate a ${type} for this job application.
-    Job Description:
-    ${jd.substring(0, 3000)}
-    Candidate Background:
-    ${background.substring(0, 2000)}
-    Instructions based on document type:
-    IF Cover Letter:
-
-    Write a compelling 3-paragraph cover letter (250-300 words)
-    Paragraph 1: Hook - why you're excited about this specific role
-    Paragraph 2: Proof - 2-3 relevant achievements that match their needs
-    Paragraph 3: Close - call to action
-    Use professional but warm tone
-    Include specific keywords from the job description
-
-    IF Resume Bullets:
-
-    Generate 5-7 achievement-focused bullet points
-    Use action verbs and quantify results where possible
-    Tailor each bullet to match required skills in the job description
-    Format: [Action Verb] + [What you did] + [Impact/Result]
-
-    IF LinkedIn Message:
-
-    Write a 2-3 sentence personalized message to a recruiter/hiring manager
-    Mention specific aspect of the company/role that interests you
-    Keep it under 300 characters, professional yet conversational
-    Include a clear call to action (request for coffee chat/call)
-
-    Make content specific, authentic, and ATS-friendly.
-  `;
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt
-  });
-  return response.text || "";
+    };
+  } catch (error) {
+    console.error("Analyzer Error:", error);
+    throw new Error("Failed to analyze application.");
+  }
 };
 
 export interface ResearchResult {
   companyName: string;
   roleTitle: string;
-  summary: {
-    opportunityScore: number;
-    applyPriority: string;
-    verdict: string;
-    nextSteps: string[];
-  };
-  companyIntelligence: {
-    overview: string;
-    sizeAndStage: string;
-    competitors: string[];
-    financialHealth: string;
-  };
-  marketAnalysis: {
-    recentNews: string[];
-    marketPosition: string;
-  };
-  culture: {
-    workEnvironment: string;
-    engineeringCulture: string;
-  };
-  compensation: {
-    salaryRange: string;
-    breakdown: {
-        fresher: string;
-        mid: string;
-        senior: string;
-    };
-    comparison: string;
-    benefits: string[];
-  };
-  hiring: {
-    process: string[];
-    applicationStrategy: string;
-  };
-  risks: {
-    level: string;
-    concerns: string[];
-  };
-  strategy: {
-    outreach: string;
-    differentiators: string[];
-  };
-  reviews: {
-    glassdoor: { rating: string; pros: string; cons: string };
-    reddit: { sentiment: string; keyDiscussions: string[] };
-    employeeVoices: { source: string; quote: string }[];
+  summary: { opportunityScore: number; applyPriority: string; verdict: string; nextSteps: string[]; };
+  companyIntelligence: { overview: string; sizeAndStage: string; competitors: string[]; financialHealth: string; };
+  marketAnalysis: { recentNews: string[]; marketPosition: string; };
+  culture: { workEnvironment: string; engineeringCulture: string; };
+  compensation: { salaryRange: string; breakdown: { fresher: string; mid: string; senior: string; }; comparison: string; benefits: string[]; };
+  hiring: { process: string[]; applicationStrategy: string; };
+  risks: { level: string; concerns: string[]; };
+  strategy: { outreach: string; differentiators: string[]; };
+  reviews: { 
+    glassdoor: { rating: string; pros: string; cons: string }; 
+    reddit: { sentiment: string; keyDiscussions: string[] }; 
+    employeeVoices: { source: string; quote: string; sentiment: string }[]; 
   };
   sources: { title: string; url: string }[];
 }
 
 export const validateResearchResult = (data: any): ResearchResult => {
   return {
-    companyName: data?.companyName || "Unknown Company",
-    roleTitle: data?.roleTitle || "Unknown Role",
+    companyName: ensureString(data?.companyName) || "Unknown Company",
+    roleTitle: ensureString(data?.roleTitle) || "Unknown Role",
     summary: {
-      opportunityScore: data?.summary?.opportunityScore || 0,
-      applyPriority: data?.summary?.applyPriority || "Low",
-      verdict: data?.summary?.verdict || "No verdict provided.",
-      nextSteps: data?.summary?.nextSteps || []
+      opportunityScore: typeof data?.summary?.opportunityScore === 'number' ? data.summary.opportunityScore : 0,
+      applyPriority: ensureString(data?.summary?.applyPriority) || "Low",
+      verdict: ensureString(data?.summary?.verdict) || "No verdict provided.",
+      nextSteps: ensureStringArray(data?.summary?.nextSteps)
     },
     companyIntelligence: {
-      overview: data?.companyIntelligence?.overview || "Not available.",
-      sizeAndStage: data?.companyIntelligence?.sizeAndStage || "Not available.",
-      competitors: data?.companyIntelligence?.competitors || [],
-      financialHealth: data?.companyIntelligence?.financialHealth || "Not available."
+      overview: ensureString(data?.companyIntelligence?.overview) || "Not available.",
+      sizeAndStage: ensureString(data?.companyIntelligence?.sizeAndStage) || "Not available.",
+      competitors: ensureStringArray(data?.companyIntelligence?.competitors),
+      financialHealth: ensureString(data?.companyIntelligence?.financialHealth) || "Not available."
     },
     marketAnalysis: {
-      recentNews: data?.marketAnalysis?.recentNews || [],
-      marketPosition: data?.marketAnalysis?.marketPosition || "Not available."
+      recentNews: ensureStringArray(data?.marketAnalysis?.recentNews),
+      marketPosition: ensureString(data?.marketAnalysis?.marketPosition) || "Not available."
     },
     culture: {
-      workEnvironment: data?.culture?.workEnvironment || "Not available.",
-      engineeringCulture: data?.culture?.engineeringCulture || "Not available."
+      workEnvironment: ensureString(data?.culture?.workEnvironment) || "Not available.",
+      engineeringCulture: ensureString(data?.culture?.engineeringCulture) || "Not available."
     },
     compensation: {
-      salaryRange: data?.compensation?.salaryRange || "Not available",
+      salaryRange: ensureString(data?.compensation?.salaryRange) || "Not available",
       breakdown: {
-          fresher: data?.compensation?.breakdown?.fresher || "N/A",
-          mid: data?.compensation?.breakdown?.mid || "N/A",
-          senior: data?.compensation?.breakdown?.senior || "N/A"
+          fresher: ensureString(data?.compensation?.breakdown?.fresher) || "N/A",
+          mid: ensureString(data?.compensation?.breakdown?.mid) || "N/A",
+          senior: ensureString(data?.compensation?.breakdown?.senior) || "N/A"
       },
-      comparison: data?.compensation?.comparison || "",
-      benefits: data?.compensation?.benefits || []
+      comparison: ensureString(data?.compensation?.comparison) || "",
+      benefits: ensureStringArray(data?.compensation?.benefits)
     },
     hiring: {
-      process: data?.hiring?.process || [],
-      applicationStrategy: data?.hiring?.applicationStrategy || ""
+      process: ensureStringArray(data?.hiring?.process),
+      applicationStrategy: ensureString(data?.hiring?.applicationStrategy) || ""
     },
     risks: {
-      level: data?.risks?.level || "Medium",
-      concerns: data?.risks?.concerns || []
+      level: ensureString(data?.risks?.level) || "Medium",
+      concerns: ensureStringArray(data?.risks?.concerns)
     },
     strategy: {
-      outreach: data?.strategy?.outreach || "",
-      differentiators: data?.strategy?.differentiators || []
+      outreach: ensureString(data?.strategy?.outreach) || "",
+      differentiators: ensureStringArray(data?.strategy?.differentiators)
     },
     reviews: {
       glassdoor: {
-        rating: data?.reviews?.glassdoor?.rating || "N/A",
-        pros: data?.reviews?.glassdoor?.pros || "",
-        cons: data?.reviews?.glassdoor?.cons || ""
+        rating: ensureString(data?.reviews?.glassdoor?.rating) || "N/A",
+        pros: ensureString(data?.reviews?.glassdoor?.pros) || "",
+        cons: ensureString(data?.reviews?.glassdoor?.cons) || ""
       },
       reddit: {
-        sentiment: data?.reviews?.reddit?.sentiment || "Neutral",
-        keyDiscussions: data?.reviews?.reddit?.keyDiscussions || []
+        sentiment: ensureString(data?.reviews?.reddit?.sentiment) || "Neutral",
+        keyDiscussions: ensureStringArray(data?.reviews?.reddit?.keyDiscussions)
       },
-      employeeVoices: data?.reviews?.employeeVoices || []
+      employeeVoices: (data?.reviews?.employeeVoices || []).slice(0, 5).map((v: any) => ({
+        source: ensureString(v.source),
+        quote: ensureString(v.quote),
+        sentiment: ensureString(v.sentiment) || 'Neutral'
+      }))
     },
-    sources: data?.sources || []
+    sources: (data?.sources || []).slice(0, 10).map((s: any) => ({
+      title: ensureString(s.title),
+      url: ensureString(s.url)
+    }))
   };
 };
 
 export const runAgentResearch = async (company: string, role: string): Promise<ResearchResult> => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key is missing.");
   const ai = new GoogleGenAI({ apiKey });
-
-  const prompt = `
-    You are an autonomous research agent specializing in Indian and Global job market intelligence. 
-    Conduct multi-step research on this opportunity using Google Search and provide a detailed actionable report in JSON format.
-
-    Target Company: ${company}
-    Target Role: ${role}
-
-    SEARCH STRATEGY:
-    1. Use Google Search to find real-time data.
-    2. Specifically look for **Glassdoor reviews for ${company} in India** (or global if India not available).
-    3. Look for **Reddit threads** on r/developersIndia, r/csMajors, or r/jobs about ${company} work culture.
-    4. Find **salary data** on Levels.fyi, AmbitionBox, or Glassdoor for India (INR). 
-    5. SPECIFICALLY look for data for Freshers (0-1 yoe), Mid-level (2-3 yoe), and Senior roles.
-    6. Look for **Interview Questions, Candidate Experiences, and Employee Reviews**.
-
-    Conduct systematic research and provide findings adhering to the JSON structure below.
-    
-    Structure the response as a valid JSON object with the following schema:
-    {
-      "companyName": "string",
-      "roleTitle": "string",
-      "summary": { "opportunityScore": number, "applyPriority": "High" | "Medium" | "Low", "verdict": "string", "nextSteps": ["string"] },
-      "companyIntelligence": { "overview": "string", "sizeAndStage": "string", "competitors": ["string"], "financialHealth": "string" },
-      "marketAnalysis": { "recentNews": ["string"], "marketPosition": "string" },
-      "culture": { "workEnvironment": "string", "engineeringCulture": "string" },
-      "compensation": { 
-          "salaryRange": "string (Overall estimated range)", 
-          "breakdown": {
-              "fresher": "string (e.g. ₹12L - ₹18L)",
-              "mid": "string (e.g. ₹20L - ₹35L)",
-              "senior": "string (e.g. ₹40L+)"
-          },
-          "comparison": "string", 
-          "benefits": ["string"] 
-      },
-      "hiring": { "process": ["string"], "applicationStrategy": "string" },
-      "risks": { "level": "Low" | "Medium" | "High", "concerns": ["string"] },
-      "strategy": { "outreach": "string", "differentiators": ["string"] },
-      "reviews": {
-        "glassdoor": { "rating": "string", "pros": "string", "cons": "string" },
-        "reddit": { "sentiment": "string", "keyDiscussions": ["string"] },
-        "employeeVoices": [{ "source": "string", "quote": "string" }]
-      },
-      "sources": [{ "title": "string", "url": "string" }]
-    }
-
-    IMPORTANT RULES:
-    1. Return ONLY the raw JSON string. Do not include markdown code blocks or explanations.
-    2. **Sources**: List exactly **top 5** most relevant URLs focused on interview questions, candidate experiences, and detailed employee reviews. Do NOT provide generic homepages.
+  
+  const schemaDescription = `
+  {
+    "companyName": "string",
+    "roleTitle": "string",
+    "summary": { "opportunityScore": number, "applyPriority": "High/Medium/Low", "verdict": "string", "nextSteps": ["string"] },
+    "companyIntelligence": { "overview": "string", "sizeAndStage": "string", "competitors": ["string"], "financialHealth": "string" },
+    "marketAnalysis": { "recentNews": ["string"], "marketPosition": "string" },
+    "culture": { "workEnvironment": "string", "engineeringCulture": "string" },
+    "compensation": { "salaryRange": "string", "breakdown": { "fresher": "string", "mid": "string", "senior": "string" }, "comparison": "string", "benefits": ["string"] },
+    "hiring": { "process": ["string"], "applicationStrategy": "string" },
+    "risks": { "level": "High/Medium/Low", "concerns": ["string"] },
+    "strategy": { "outreach": "string", "differentiators": ["string"] },
+    "reviews": { "glassdoor": { "rating": "string", "pros": "string", "cons": "string" }, "reddit": { "sentiment": "string", "keyDiscussions": ["string"] }, "employeeVoices": [{ "source": "string", "quote": "string", "sentiment": "Positive/Negative/Neutral" }] },
+    "sources": [{ "title": "string", "url": "string" }]
+  }
   `;
+
+  const prompt = `Conduct deep research on "${company}" for the role of "${role}".
+  Use Google Search to find real-time data about salaries, culture, interview process, and recent news.
+  
+  Requirements:
+  1. Find exactly 10 top-tier sources (Official career page, Glassdoor, Reddit, Blind, InterviewBit, GeeksforGeeks, etc.).
+  2. Include links to company details, interview questions/guides, and previous year questions.
+  3. Find 5 distinct employee reviews covering different perspectives (Positive, Negative, Neutral).
+  4. "opportunityScore" MUST be a number between 0 and 10 (where 10 is excellent).
+  
+  Return the result as a STRICT JSON object matching exactly this structure:
+  ${schemaDescription}
+  
+  IMPORTANT: Return ONLY the raw JSON string. Do not use markdown code blocks.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt,
     config: { 
-      tools: [{ googleSearch: {} }] // Enable Google Search
+      tools: [{ googleSearch: {} }] 
     }
   });
 
-  const text = response.text || "{}";
-  const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+  let jsonStr = response.text || "{}";
+  jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
   
-  try {
-      const parsed = JSON.parse(cleanText);
-      return validateResearchResult(parsed);
-  } catch (e) {
-      console.error("Failed to parse JSON from research agent", e);
-      throw new Error("Failed to generate structured report. Please try again.");
+  const start = jsonStr.indexOf('{');
+  const end = jsonStr.lastIndexOf('}');
+  if (start !== -1 && end !== -1) {
+    jsonStr = jsonStr.substring(start, end + 1);
   }
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return validateResearchResult(parsed);
+  } catch (e) {
+    console.error("JSON Parse Error in Research Agent:", e);
+    return validateResearchResult({});
+  }
+};
+
+export interface InterviewPrepResult {
+  companyResearch: {
+    mission: string;
+    products: string[];
+    culture: string;
+    recentNews: string[];
+  };
+  technical: {
+    topics: string[];
+    questions: { question: string; answer: string }[];
+  };
+  behavioral: {
+    competencies: string[];
+    questions: { question: string; starGuide: string }[];
+  };
+  questionsToAsk: string[];
+}
+
+export const runAgentInterviewPrep = async (company: string, role: string, jd: string): Promise<InterviewPrepResult> => {
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
+  
+  const schemaDescription = `
+  {
+    "companyResearch": { 
+      "mission": "string", 
+      "products": ["string"], 
+      "culture": "string", 
+      "recentNews": ["string"] 
+    },
+    "technical": { 
+      "topics": ["string"], 
+      "questions": [{ "question": "string", "answer": "string" }] 
+    },
+    "behavioral": { 
+      "competencies": ["string"], 
+      "questions": [{ "question": "string", "starGuide": "string" }] 
+    },
+    "questionsToAsk": ["string"]
+  }`;
+
+  const prompt = `Create a comprehensive interview preparation kit for the role of "${role}" at "${company}".
+  
+  JD CONTEXT:
+  ${jd.substring(0, 3000)}
+  
+  Requirements:
+  1. Infer company mission and culture if known, otherwise generate general tech standard.
+  2. Generate 5-7 specific technical questions with brief answers.
+  3. Generate 3 behavioral questions with STAR method guidance.
+  4. Suggest 5 smart questions for the candidate to ask the interviewer.
+  
+  Return the result as a STRICT JSON object matching exactly this structure:
+  ${schemaDescription}
+  
+  IMPORTANT: Return ONLY the raw JSON string. Do not use markdown code blocks.`;
+
+  try {
+    const response = await ai.models.generateContent({ 
+      model: 'gemini-2.5-flash', 
+      contents: prompt,
+      config: { responseMimeType: 'application/json' }
+    });
+    
+    let jsonStr = response.text || "{}";
+    jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
+    
+    const parsed = JSON.parse(jsonStr);
+    
+    // Validate and Clean
+    return {
+      companyResearch: {
+        mission: ensureString(parsed.companyResearch?.mission),
+        products: ensureStringArray(parsed.companyResearch?.products),
+        culture: ensureString(parsed.companyResearch?.culture),
+        recentNews: ensureStringArray(parsed.companyResearch?.recentNews)
+      },
+      technical: {
+        topics: ensureStringArray(parsed.technical?.topics),
+        questions: (parsed.technical?.questions || []).map((q: any) => ({
+          question: ensureString(q.question),
+          answer: ensureString(q.answer)
+        }))
+      },
+      behavioral: {
+        competencies: ensureStringArray(parsed.behavioral?.competencies),
+        questions: (parsed.behavioral?.questions || []).map((q: any) => ({
+          question: ensureString(q.question),
+          starGuide: ensureString(q.starGuide)
+        }))
+      },
+      questionsToAsk: ensureStringArray(parsed.questionsToAsk)
+    };
+  } catch (error) {
+    console.error("Prep Agent Error:", error);
+    // Return empty structure on error to prevent UI crash
+    return {
+      companyResearch: { mission: "Failed to generate.", products: [], culture: "", recentNews: [] },
+      technical: { topics: [], questions: [] },
+      behavioral: { competencies: [], questions: [] },
+      questionsToAsk: []
+    };
+  }
+};
+
+export const runAgentDocumentGen = async (params: { 
+  type: string; 
+  template: string; 
+  tone: string;
+  jd: string; 
+  resume: Resume;
+  additionalContext?: string;
+}): Promise<string> => {
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
+  
+  const systemPrompt = `You are a world-class career strategist and expert copywriter. 
+  Your task is to generate a high-impact career document based on the specific template and tone provided.
+  
+  STRATEGIC TEMPLATES:
+  - "T-Format": A document with a side-by-side comparison of "What You Need" and "How I Deliver".
+  - "Pain Letter": A letter that focuses on identifying and solving a specific "pain point" the company is facing.
+  - "Direct & Impactful": Standard high-quality professional document.
+  - "The Referral Request": A message meant to be sent to a contact inside the company to ask for a referral.
+  
+  RULES:
+  - Do NOT use placeholders like [Your Name]. Use the real name from the resume: ${params.resume.fullName}.
+  - Use the contact info provided: Email: ${params.resume.email}, Phone: ${params.resume.phone}.
+  - Maintain a ${params.tone} tone throughout.
+  - Inject relevant skills from the user's profile: ${params.resume.skills}.`;
+
+  const prompt = `Generate a ${params.type} using the "${params.template}" strategy.
+  
+  TARGET JOB DESCRIPTION:
+  ${params.jd.substring(0, 3000)}
+  
+  ADDITIONAL USER CONTEXT:
+  ${params.additionalContext || "None provided."}
+  
+  FULL RESUME DATA FOR CONTEXT:
+  ${JSON.stringify({ ...params.resume, avatarImage: undefined })}
+  
+  Return ONLY the generated content in professional Markdown format. Do not include introductory text like "Here is your letter".`;
+
+  const response = await ai.models.generateContent({ 
+    model: 'gemini-2.5-flash', 
+    contents: prompt,
+    config: { systemInstruction: systemPrompt }
+  });
+  
+  return cleanAIResponse(response.text || "");
 };
