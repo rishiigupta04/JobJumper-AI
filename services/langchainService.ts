@@ -1,3 +1,4 @@
+
 import { GeminiChatModel } from "../lib/GeminiAdapter";
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
@@ -13,7 +14,7 @@ const getApiKey = () => {
 // Initialize the custom model
 const model = new GeminiChatModel({ 
   apiKey: getApiKey(),
-  modelName: "gemini-2.5-flash" 
+  modelName: "gemini-3-flash-preview" 
 });
 
 // Define the prompt template

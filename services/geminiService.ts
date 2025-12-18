@@ -112,7 +112,7 @@ export const scoreResume = async (resume: Resume, jobDescription: string): Promi
     };
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: [{ parts: [{ text: prompt }] }],
       config: { responseMimeType: 'application/json', responseSchema: schema }
     });
@@ -137,7 +137,7 @@ export const generateCoverLetter = async (jobRole: string, company: string, user
   const ai = new GoogleGenAI({ apiKey });
   try {
     const prompt = `Write a professional cover letter for ${jobRole} at ${company}. My skills: ${userSkills}. ${jobDescription ? `JD: ${truncateString(jobDescription, 1500)}` : ''}`;
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
     return cleanAIResponse(response.text || "Failed to generate.");
   } catch (error) {
     return "An error occurred.";
@@ -150,7 +150,7 @@ export const generateInterviewGuide = async (jobRole: string, company: string, d
   const ai = new GoogleGenAI({ apiKey });
   try {
     const prompt = `Create a strategic interview prep guide for ${jobRole} at ${company}.\nJD: "${truncateString(description, 2000)}"`;
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
     return response.text || "Failed to generate.";
   } catch (error) {
     return "An error occurred.";
@@ -163,7 +163,7 @@ export const generateNegotiationStrategy = async (jobRole: string, company: stri
   const ai = new GoogleGenAI({ apiKey });
   try {
     const prompt = `Create a salary negotiation strategy for ${jobRole} at ${company}. Offer: ${salary}.\nJD: "${truncateString(description, 1000)}"`;
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
     return response.text || "Failed to generate.";
   } catch (error) {
     return "An error occurred.";
@@ -177,7 +177,7 @@ export const enhanceResumeText = async (text: string, type: 'summary' | 'experie
   if (!text) return "";
   try {
     const prompt = `Rewrite this resume ${type} to be more professional: "${truncateString(text, 1000)}"`;
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
     return cleanAIResponse(response.text || text);
   } catch (error) {
     return text;
@@ -192,7 +192,7 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
     const cleanInput = JSON.stringify({ ...currentResume, avatarImage: undefined });
     const prompt = `Rewrite the resume content to be professional and impactful. Return ONLY JSON.\n${cleanInput}`;
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: [{ parts: [{ text: prompt }] }],
       config: { responseMimeType: 'application/json' }
     });
@@ -211,7 +211,7 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
   try {
     const prompt = `Tailor this resume to the JD below. Return ONLY JSON.\nResume: ${JSON.stringify({ ...currentResume, avatarImage: undefined })}\nJD: ${truncateString(jobDescription, 3000)}`;
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: [{ parts: [{ text: prompt }] }],
       config: { responseMimeType: 'application/json' }
     });
@@ -251,7 +251,7 @@ export const parseResumeFromDocument = async (fileBase64: string): Promise<Parti
     const { mimeType, data } = parseDataUrl(fileBase64);
     const prompt = `Analyze this resume and extract into JSON. Use vertical bars for skills.`;
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: { parts: [{ inlineData: { data: data, mimeType: mimeType } }, { text: prompt }] },
       config: { responseMimeType: 'application/json' }
     });
@@ -272,7 +272,7 @@ export const chatWithChatur = async (history: ChatMessage[], userMessage: string
     const contents = history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
     contents.push({ role: 'user', parts: [{ text: userMessage }] });
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: contents,
       config: { systemInstruction }
     });
@@ -353,7 +353,7 @@ export const runAgentAnalyzer = async (jobDescription: string, resume: Resume): 
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
 
@@ -542,7 +542,7 @@ export const runAgentResearch = async (company: string, role: string): Promise<R
   IMPORTANT: Return ONLY the raw JSON string. Do not use markdown code blocks.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     contents: prompt,
     config: { 
       tools: [{ googleSearch: {} }] 
@@ -626,7 +626,7 @@ export const runAgentInterviewPrep = async (company: string, role: string, jd: s
 
   try {
     const response = await ai.models.generateContent({ 
-      model: 'gemini-2.5-flash', 
+      model: 'gemini-3-flash-preview', 
       contents: prompt,
       config: { responseMimeType: 'application/json' }
     });
@@ -712,7 +712,7 @@ export const runAgentDocumentGen = async (params: {
   Return ONLY the generated content in professional Markdown format. Do not include introductory text like "Here is your letter".`;
 
   const response = await ai.models.generateContent({ 
-    model: 'gemini-2.5-flash', 
+    model: 'gemini-3-flash-preview', 
     contents: prompt,
     config: { systemInstruction: systemPrompt }
   });

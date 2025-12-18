@@ -1,3 +1,4 @@
+
 import { BaseChatModel, type BaseChatModelParams } from "@langchain/core/language_models/chat_models";
 import { BaseMessage, AIMessage } from "@langchain/core/messages";
 import { ChatResult } from "@langchain/core/outputs";
@@ -21,7 +22,7 @@ export class GeminiChatModel extends BaseChatModel {
   constructor(fields: GeminiChatModelInput) {
     super(fields);
     this.apiKey = fields.apiKey;
-    this.modelName = fields.modelName || "gemini-2.5-flash";
+    this.modelName = fields.modelName || "gemini-3-flash-preview";
     this.client = new GoogleGenAI({ apiKey: this.apiKey });
   }
 
