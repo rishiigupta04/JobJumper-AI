@@ -226,41 +226,61 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
 export const generateAvatar = async (imageBase64: string, stylePrompt: string): Promise<string> => {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
-  const ai = new GoogleGenAI({ apiKey });
-  try {
-    const { mimeType, data } = parseDataUrl(imageBase64);
-    const prompt = `Transform this portrait into a high-quality professional corporate headshot. Style: ${stylePrompt}.`;
-    
-    // Using gemini-3-pro-image-preview to avoid quota issues on the flash-image model and for better quality.
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
-      contents: { parts: [{ inlineData: { data: data, mimeType: mimeType } }, { text: prompt }] },
-      config: {
-        imageConfig: {
-            aspectRatio: "1:1",
-            imageSize: "1K"
+  
+  const { mimeType, data } = parseDataUrl(imageBase64);
+  const prompt = `Transform this portrait into a high-quality professional corporate headshot. Style: ${stylePrompt}.`;
+  
+  // Try models in order of preference to handle quota limits
+  const models = ['gemini-3-pro-image-preview', 'gemini-2.5-flash-image'];
+  
+  let lastError: any;
+
+  for (const model of models) {
+    try {
+        const ai = new GoogleGenAI({ apiKey });
+        
+        // Configure specific to model if needed
+        const config: any = {
+            imageConfig: {
+                aspectRatio: "1:1"
+            }
+        };
+        // gemini-3-pro-image-preview supports imageSize, others might not
+        if (model === 'gemini-3-pro-image-preview') {
+            config.imageConfig.imageSize = "1K";
         }
-      }
-    });
-    
-    if (response.candidates?.[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData && part.inlineData.data) {
-          return `data:image/png;base64,${part.inlineData.data}`;
+
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: { parts: [{ inlineData: { data: data, mimeType: mimeType } }, { text: prompt }] },
+            config: config
+        });
+        
+        if (response.candidates?.[0]?.content?.parts) {
+            for (const part of response.candidates[0].content.parts) {
+                if (part.inlineData && part.inlineData.data) {
+                    return `data:image/png;base64,${part.inlineData.data}`;
+                }
+            }
         }
-      }
+    } catch (error: any) {
+        console.warn(`Avatar generation failed with model ${model}:`, error.message);
+        lastError = error;
+        // Loop continues to next model
     }
-    throw new Error("AI returned a response, but no image data was found.");
-  } catch (error: any) {
-    console.error("Gemini Avatar Error:", error);
-    if (error.status === 429 || (error.message && error.message.includes('429')) || (error.message && error.message.includes('Quota exceeded'))) {
-        throw new Error("Daily image generation quota exceeded for this model. Please try again later.");
-    }
-    if (error.message && error.message.includes('disconnected port')) {
-        throw new Error("Network error: The image might be too large. Please try a smaller file.");
-    }
-    throw error;
   }
+
+  // If all failed
+  console.error("All avatar models failed:", lastError);
+  let userMessage = "Failed to generate avatar. Please try again later.";
+  
+  if (lastError?.status === 429 || lastError?.message?.includes('429') || lastError?.message?.includes('Quota') || lastError?.message?.includes('RESOURCE_EXHAUSTED')) {
+      userMessage = "Daily image generation quota exceeded. Please check your plan or try again tomorrow.";
+  } else if (lastError?.message?.includes('disconnected port') || lastError?.message?.includes('network')) {
+      userMessage = "Network error: The image might be too large. Please try a smaller file.";
+  }
+  
+  throw new Error(userMessage);
 };
 
 export const parseResumeFromDocument = async (fileBase64: string): Promise<Partial<Resume>> => {
