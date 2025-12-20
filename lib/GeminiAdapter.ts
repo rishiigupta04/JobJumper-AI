@@ -22,7 +22,7 @@ export class GeminiChatModel extends BaseChatModel {
   constructor(fields: GeminiChatModelInput) {
     super(fields);
     this.apiKey = fields.apiKey;
-    this.modelName = fields.modelName || "gemini-3-flash-preview";
+    this.modelName = fields.modelName || "gemini-2.5-flash";
     this.client = new GoogleGenAI({ apiKey: this.apiKey });
   }
 

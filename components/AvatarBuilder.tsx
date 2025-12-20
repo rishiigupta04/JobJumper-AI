@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { generateAvatar } from '../services/geminiService';
 import { useJobContext } from '../context/JobContext';
@@ -23,16 +24,59 @@ const AvatarBuilder: React.FC = () => {
     "Tech industry style, smart casual, vibrant lighting"
   ];
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const resizeImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1024; // Limit dimension to avoid huge payloads
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+             ctx.drawImage(img, 0, 0, width, height);
+             // Use modest quality to keep size down
+             resolve(canvas.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.85));
+          } else {
+             reject(new Error("Failed to get canvas context"));
+          }
+        };
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
+      try {
+        // Resize image before setting state
+        const resizedBase64 = await resizeImage(file);
+        setSelectedImage(resizedBase64);
         setGeneratedImage(null);
         setError(null);
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Image processing error:", err);
+        setError("Failed to process image. Please try another file.");
+      }
     }
   };
 
@@ -52,8 +96,9 @@ const AvatarBuilder: React.FC = () => {
     try {
       const result = await generateAvatar(selectedImage, prompt);
       setGeneratedImage(result);
-    } catch (err) {
-      setError("Failed to generate avatar. Please try again.");
+    } catch (err: any) {
+      console.error("Avatar generation failed:", err);
+      setError(err.message || "Failed to generate avatar. Please try again.");
     } finally {
       setIsLoading(false);
     }

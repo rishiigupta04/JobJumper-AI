@@ -29,6 +29,7 @@ interface ResearchState {
   loading: boolean;
   report: ResearchResult | null;
   rawMarkdown: string | null;
+  error: string | null;
 }
 
 const AgentsDashboard: React.FC<AgentsDashboardProps> = ({ setView }) => {
@@ -42,7 +43,8 @@ const AgentsDashboard: React.FC<AgentsDashboardProps> = ({ setView }) => {
     role: '',
     loading: false,
     report: null,
-    rawMarkdown: null
+    rawMarkdown: null,
+    error: null
   });
 
   // Hoisted Research Handler
@@ -53,7 +55,7 @@ const AgentsDashboard: React.FC<AgentsDashboardProps> = ({ setView }) => {
     const currentCompany = researchState.company;
     const currentRole = researchState.role;
 
-    setResearchState(prev => ({ ...prev, loading: true, report: null, rawMarkdown: null }));
+    setResearchState(prev => ({ ...prev, loading: true, report: null, rawMarkdown: null, error: null }));
     
     try {
       const data = await runAgentResearch(currentCompany, currentRole);
@@ -72,10 +74,13 @@ const AgentsDashboard: React.FC<AgentsDashboardProps> = ({ setView }) => {
       // Persist to history
       addResearchReport(newReport);
 
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setResearchState(prev => ({ ...prev, loading: false }));
-      alert("Research failed. Please try again.");
+      setResearchState(prev => ({ 
+          ...prev, 
+          loading: false, 
+          error: e.message || "An unexpected error occurred. Please try again." 
+      }));
     }
   };
 
@@ -374,7 +379,6 @@ const AgentAnalyzer = () => {
 
        {result && (
           <div className="animate-fade-in space-y-6">
-             {/* Result content omitted for brevity as it is unchanged from previous */}
              <div className={`p-4 rounded-xl border flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg ${
                 result.recommendation.status === 'Strong Apply' ? 'bg-emerald-950/30 border-emerald-500/30' :
                 result.recommendation.status === 'Conditional Apply' ? 'bg-amber-950/30 border-amber-500/30' :
@@ -575,7 +579,7 @@ const AgentAnalyzer = () => {
   );
 };
 
-// --- AGENT 2: INTERVIEW PREP (FIXED) ---
+// ... (AgentPrep and AgentDocs components) ...
 
 const AgentPrep = () => {
   const { prepHistory, addPrepReport, deletePrepReport } = useJobContext();
@@ -833,8 +837,6 @@ const AgentPrep = () => {
   );
 };
 
-// --- AGENT 3: DOCS (RE-DESIGNED) ---
-
 const AgentDocs = () => {
   const { resume } = useJobContext();
   const [docType, setDocType] = useState('Cover Letter');
@@ -1067,7 +1069,7 @@ const AgentResearch: React.FC<{
   onRunResearch: () => void;
 }> = ({ researchState, setResearchState, onRunResearch }) => {
   const { researchHistory, deleteResearchReport } = useJobContext();
-  const { company, role, loading, report } = researchState;
+  const { company, role, loading, report, error } = researchState;
   const [activeTab, setActiveTab] = useState('overview');
 
   const tabs = [
@@ -1087,7 +1089,8 @@ const AgentResearch: React.FC<{
                role: item.role,
                loading: false,
                report: validated,
-               rawMarkdown: null
+               rawMarkdown: null,
+               error: null
            });
        } catch(e) { console.error("Failed to load report", e); }
   };
@@ -1195,7 +1198,21 @@ const AgentResearch: React.FC<{
 
           {/* Results Panel */}
           <div className="lg:col-span-8">
-              {report ? (
+              {error ? (
+                  <div className="h-full border-2 border-dashed border-rose-900/30 bg-rose-950/10 rounded-2xl flex flex-col items-center justify-center text-rose-400 p-8 text-center space-y-4">
+                      <div className="p-4 bg-rose-500/10 rounded-full border border-rose-500/20">
+                          <AlertTriangle size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-rose-200">Analysis Halted</h3>
+                      <p className="text-sm text-rose-300/80 max-w-sm">{error}</p>
+                      <button 
+                          onClick={onRunResearch} 
+                          className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg text-rose-300 text-sm transition-colors"
+                      >
+                          Try Again
+                      </button>
+                  </div>
+              ) : report ? (
                  <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col h-[700px]">
                     {/* Header */}
                     <div className="p-6 border-b border-slate-800 bg-slate-950/30">

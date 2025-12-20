@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { User, Session } from '@supabase/supabase-js';
@@ -17,25 +18,61 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    let mounted = true;
+
+    const initSession = async () => {
+      try {
+        // Check active sessions and sets the user
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          // If the refresh token is missing or invalid, we treat it as no session
+          // This prevents the app from crashing on "Invalid Refresh Token"
+          if (mounted) {
+            console.warn("Session init error:", error.message);
+            setSession(null);
+            setUser(null);
+          }
+        } else if (mounted) {
+          setSession(data.session);
+          setUser(data.session?.user ?? null);
+        }
+      } catch (err) {
+        console.error("Unexpected error during auth init:", err);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initSession();
 
     // Listen for changes on auth state (logged in, signed out, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+      if (mounted) {
+        setSession(session);
+        setUser(session?.user ?? null);
+        // Ensure loading is false when state changes (e.g. after sign in)
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error("Error signing out:", error);
+    } finally {
+      setSession(null);
+      setUser(null);
+    }
   };
 
   return (

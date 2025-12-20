@@ -14,7 +14,7 @@ const getApiKey = () => {
 // Initialize the custom model
 const model = new GeminiChatModel({ 
   apiKey: getApiKey(),
-  modelName: "gemini-3-flash-preview" 
+  modelName: "gemini-2.5-flash" 
 });
 
 // Define the prompt template

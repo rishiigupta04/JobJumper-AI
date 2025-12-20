@@ -112,7 +112,7 @@ export const scoreResume = async (resume: Resume, jobDescription: string): Promi
     };
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: [{ parts: [{ text: prompt }] }],
       config: { responseMimeType: 'application/json', responseSchema: schema }
     });
@@ -137,7 +137,7 @@ export const generateCoverLetter = async (jobRole: string, company: string, user
   const ai = new GoogleGenAI({ apiKey });
   try {
     const prompt = `Write a professional cover letter for ${jobRole} at ${company}. My skills: ${userSkills}. ${jobDescription ? `JD: ${truncateString(jobDescription, 1500)}` : ''}`;
-    const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
     return cleanAIResponse(response.text || "Failed to generate.");
   } catch (error) {
     return "An error occurred.";
@@ -150,7 +150,7 @@ export const generateInterviewGuide = async (jobRole: string, company: string, d
   const ai = new GoogleGenAI({ apiKey });
   try {
     const prompt = `Create a strategic interview prep guide for ${jobRole} at ${company}.\nJD: "${truncateString(description, 2000)}"`;
-    const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
     return response.text || "Failed to generate.";
   } catch (error) {
     return "An error occurred.";
@@ -163,7 +163,7 @@ export const generateNegotiationStrategy = async (jobRole: string, company: stri
   const ai = new GoogleGenAI({ apiKey });
   try {
     const prompt = `Create a salary negotiation strategy for ${jobRole} at ${company}. Offer: ${salary}.\nJD: "${truncateString(description, 1000)}"`;
-    const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
     return response.text || "Failed to generate.";
   } catch (error) {
     return "An error occurred.";
@@ -177,7 +177,7 @@ export const enhanceResumeText = async (text: string, type: 'summary' | 'experie
   if (!text) return "";
   try {
     const prompt = `Rewrite this resume ${type} to be more professional: "${truncateString(text, 1000)}"`;
-    const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
     return cleanAIResponse(response.text || text);
   } catch (error) {
     return text;
@@ -192,7 +192,7 @@ export const enhanceFullResume = async (currentResume: Resume): Promise<Resume> 
     const cleanInput = JSON.stringify({ ...currentResume, avatarImage: undefined });
     const prompt = `Rewrite the resume content to be professional and impactful. Return ONLY JSON.\n${cleanInput}`;
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: [{ parts: [{ text: prompt }] }],
       config: { responseMimeType: 'application/json' }
     });
@@ -211,7 +211,7 @@ export const tailorResume = async (currentResume: Resume, jobDescription: string
   try {
     const prompt = `Tailor this resume to the JD below. Return ONLY JSON.\nResume: ${JSON.stringify({ ...currentResume, avatarImage: undefined })}\nJD: ${truncateString(jobDescription, 3000)}`;
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: [{ parts: [{ text: prompt }] }],
       config: { responseMimeType: 'application/json' }
     });
@@ -230,15 +230,26 @@ export const generateAvatar = async (imageBase64: string, stylePrompt: string): 
   try {
     const { mimeType, data } = parseDataUrl(imageBase64);
     const prompt = `Transform this portrait into a high-quality professional corporate headshot. Style: ${stylePrompt}.`;
+    
+    // Using gemini-2.5-flash-image for standard generation
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: { parts: [{ inlineData: { data: data, mimeType: mimeType } }, { text: prompt }] }
     });
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+    
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData && part.inlineData.data) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
     }
-    throw new Error("No image generated.");
-  } catch (error) {
+    throw new Error("AI returned a response, but no image data was found.");
+  } catch (error: any) {
+    console.error("Gemini Avatar Error:", error);
+    if (error.message && error.message.includes('disconnected port')) {
+        throw new Error("Network error: The image might be too large. Please try a smaller file.");
+    }
     throw error;
   }
 };
@@ -247,18 +258,87 @@ export const parseResumeFromDocument = async (fileBase64: string): Promise<Parti
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key is missing.");
   const ai = new GoogleGenAI({ apiKey });
+
+  // Explicit schema for robust extraction
+  const schema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      fullName: { type: Type.STRING },
+      email: { type: Type.STRING },
+      phone: { type: Type.STRING },
+      linkedin: { type: Type.STRING },
+      location: { type: Type.STRING },
+      jobTitle: { type: Type.STRING },
+      summary: { type: Type.STRING },
+      skills: { type: Type.ARRAY, items: { type: Type.STRING } }, // Extract as array initially
+      experience: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            role: { type: Type.STRING },
+            company: { type: Type.STRING },
+            startDate: { type: Type.STRING },
+            endDate: { type: Type.STRING },
+            description: { type: Type.STRING } // Markdown bullet points
+          }
+        }
+      },
+      projects: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            technologies: { type: Type.STRING },
+            link: { type: Type.STRING },
+            description: { type: Type.STRING }
+          }
+        }
+      },
+      education: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            degree: { type: Type.STRING },
+            school: { type: Type.STRING },
+            year: { type: Type.STRING },
+            grade: { type: Type.STRING }
+          }
+        }
+      }
+    }
+  };
+
   try {
     const { mimeType, data } = parseDataUrl(fileBase64);
-    const prompt = `Analyze this resume and extract into JSON. Use vertical bars for skills.`;
+    const prompt = `Extract data from this resume. 
+    - For 'skills', list them as an array.
+    - For 'description' fields in experience and projects, maintain bullet points if present.
+    - Infer 'jobTitle' if not explicitly stated (e.g. current role).
+    - Ensure dates are formatted nicely (e.g. "Jan 2023").`;
+
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: { parts: [{ inlineData: { data: data, mimeType: mimeType } }, { text: prompt }] },
-      config: { responseMimeType: 'application/json' }
+      config: { 
+        responseMimeType: 'application/json',
+        responseSchema: schema
+      }
     });
+
     const parsed = JSON.parse(response.text || "{}");
+    
+    // Post-processing: Convert skills array to pipe-separated string
+    if (Array.isArray(parsed.skills)) {
+        parsed.skills = parsed.skills.join(' | ');
+    }
+    
     const cleaned = traverseAndClean(parsed);
     return normalizeResumeJSON(cleaned);
   } catch (error) {
+    console.error("Resume Import Error:", error);
     throw error;
   }
 };
@@ -272,7 +352,7 @@ export const chatWithChatur = async (history: ChatMessage[], userMessage: string
     const contents = history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
     contents.push({ role: 'user', parts: [{ text: userMessage }] });
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: contents,
       config: { systemInstruction }
     });
@@ -353,7 +433,7 @@ export const runAgentAnalyzer = async (jobDescription: string, resume: Resume): 
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: prompt,
     });
 
@@ -541,29 +621,37 @@ export const runAgentResearch = async (company: string, role: string): Promise<R
   
   IMPORTANT: Return ONLY the raw JSON string. Do not use markdown code blocks.`;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: prompt,
-    config: { 
-      tools: [{ googleSearch: {} }] 
-    }
-  });
-
-  let jsonStr = response.text || "{}";
-  jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
-  
-  const start = jsonStr.indexOf('{');
-  const end = jsonStr.lastIndexOf('}');
-  if (start !== -1 && end !== -1) {
-    jsonStr = jsonStr.substring(start, end + 1);
-  }
-
   try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: { 
+        tools: [{ googleSearch: {} }] 
+      }
+    });
+
+    let jsonStr = response.text || "{}";
+    jsonStr = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
+    
+    const start = jsonStr.indexOf('{');
+    const end = jsonStr.lastIndexOf('}');
+    if (start !== -1 && end !== -1) {
+      jsonStr = jsonStr.substring(start, end + 1);
+    }
+
     const parsed = JSON.parse(jsonStr);
     return validateResearchResult(parsed);
-  } catch (e) {
-    console.error("JSON Parse Error in Research Agent:", e);
-    return validateResearchResult({});
+  } catch (error: any) {
+    console.error("Research Agent Error:", error);
+    if (error.status === 429 || (error.message && error.message.includes('429'))) {
+       throw new Error("You exceeded your daily AI quota for deep research. Please try again later.");
+    }
+    // Fallback for JSON parse errors or other issues
+    if (error instanceof SyntaxError) {
+       console.error("Invalid JSON from Agent:", error);
+       // We can attempt to recover partial data or just fail
+    }
+    throw error;
   }
 };
 
@@ -626,7 +714,7 @@ export const runAgentInterviewPrep = async (company: string, role: string, jd: s
 
   try {
     const response = await ai.models.generateContent({ 
-      model: 'gemini-3-flash-preview', 
+      model: 'gemini-2.5-flash', 
       contents: prompt,
       config: { responseMimeType: 'application/json' }
     });
@@ -712,7 +800,7 @@ export const runAgentDocumentGen = async (params: {
   Return ONLY the generated content in professional Markdown format. Do not include introductory text like "Here is your letter".`;
 
   const response = await ai.models.generateContent({ 
-    model: 'gemini-3-flash-preview', 
+    model: 'gemini-2.5-flash', 
     contents: prompt,
     config: { systemInstruction: systemPrompt }
   });
