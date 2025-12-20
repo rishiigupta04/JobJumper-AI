@@ -231,10 +231,16 @@ export const generateAvatar = async (imageBase64: string, stylePrompt: string): 
     const { mimeType, data } = parseDataUrl(imageBase64);
     const prompt = `Transform this portrait into a high-quality professional corporate headshot. Style: ${stylePrompt}.`;
     
-    // Using gemini-2.5-flash-image for standard generation
+    // Using gemini-3-pro-image-preview to avoid quota issues on the flash-image model and for better quality.
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: { parts: [{ inlineData: { data: data, mimeType: mimeType } }, { text: prompt }] }
+      model: 'gemini-3-pro-image-preview',
+      contents: { parts: [{ inlineData: { data: data, mimeType: mimeType } }, { text: prompt }] },
+      config: {
+        imageConfig: {
+            aspectRatio: "1:1",
+            imageSize: "1K"
+        }
+      }
     });
     
     if (response.candidates?.[0]?.content?.parts) {
@@ -247,6 +253,9 @@ export const generateAvatar = async (imageBase64: string, stylePrompt: string): 
     throw new Error("AI returned a response, but no image data was found.");
   } catch (error: any) {
     console.error("Gemini Avatar Error:", error);
+    if (error.status === 429 || (error.message && error.message.includes('429')) || (error.message && error.message.includes('Quota exceeded'))) {
+        throw new Error("Daily image generation quota exceeded for this model. Please try again later.");
+    }
     if (error.message && error.message.includes('disconnected port')) {
         throw new Error("Network error: The image might be too large. Please try a smaller file.");
     }
