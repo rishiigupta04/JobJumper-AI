@@ -4,7 +4,6 @@
 This contains everything you need to run your app locally.
 JobJumper is a cutting-edge, AI-powered career copilot designed to automate the most tedious aspects of the job search process. Built with a modern **React + TypeScript** frontend and a robust **Python + LangChain** backend, it leverages advanced Large Language Models (LLMs) to analyze job descriptions, generate tailored application materials, conduct deep company research, and prepare candidates for interviews.
 
-View your app in AI Studio: https://ai.studio/apps/75af926e-ae2a-48a4-8e72-1eceed059e96
 ## 🌟 Key Features
 
 ## Run Locally
