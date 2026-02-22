@@ -329,6 +329,33 @@ const ResumeBuilder: React.FC = () => {
     });
   };
 
+  // Helper to format skills if they are an object (legacy/categorized)
+  const formatSkills = (skills: any) => {
+      if (!skills) return '';
+      if (typeof skills === 'string') return skills;
+      
+      if (typeof skills === 'object') {
+          // If it's an array, join it
+          if (Array.isArray(skills)) return skills.join(' | ');
+          
+          // If it's an object (categories), flatten it into a single pipe-separated string
+          try {
+              const allSkills: string[] = [];
+              Object.values(skills).forEach((items: any) => {
+                  if (Array.isArray(items)) {
+                      allSkills.push(...items);
+                  } else if (typeof items === 'string') {
+                      allSkills.push(items);
+                  }
+              });
+              return allSkills.join(' | ');
+          } catch (e) {
+              return JSON.stringify(skills);
+          }
+      }
+      return String(skills);
+  };
+
   return (
     <div className="h-[calc(100vh-140px)] flex flex-col lg:flex-row gap-6">
       
@@ -471,7 +498,7 @@ const ResumeBuilder: React.FC = () => {
             <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Skills</h3>
             <textarea 
               className={`${inputClass} min-h-[80px]`}
-              value={resume.skills} 
+              value={formatSkills(resume.skills)} 
               onChange={e => updateResume({...resume, skills: e.target.value})}
               placeholder="React | TypeScript | Node.js | Project Management..."
             />
@@ -686,7 +713,9 @@ const ResumeBuilder: React.FC = () => {
               {resume.skills && (
                 <div className="mb-6">
                   <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 border-b border-slate-200 mb-2 pb-1">Technical Skills</h2>
-                  <p className="text-sm text-slate-700 leading-relaxed">{resume.skills}</p>
+                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                    {formatSkills(resume.skills)}
+                  </p>
                 </div>
               )}
 

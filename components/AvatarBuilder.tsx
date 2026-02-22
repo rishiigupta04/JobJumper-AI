@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { generateAvatar } from '../services/geminiService';
 import { useJobContext } from '../context/JobContext';
+import { useAuth } from '../context/AuthContext';
 import { 
   Camera, Upload, Sparkles, Download, RefreshCw, 
   Image as ImageIcon, Loader2, Wand2, Save 
@@ -9,6 +10,7 @@ import {
 
 const AvatarBuilder: React.FC = () => {
   const { resume, updateResume } = useJobContext();
+  const { isDemoMode } = useAuth();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
@@ -16,6 +18,25 @@ const AvatarBuilder: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const demoPairs = [
+    {
+      before: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=800&q=80",
+      after: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=800&q=80",
+    },
+    {
+      before: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&q=80",
+      after: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80",
+    }
+  ];
+
+  const loadDemoExample = () => {
+      const randomPair = demoPairs[Math.floor(Math.random() * demoPairs.length)];
+      setSelectedImage(randomPair.before);
+      setPrompt("Professional studio headshot, navy suit, neutral background");
+      setGeneratedImage(null);
+      setError(null);
+  };
 
   const predefinedStyles = [
     "Studio lighting, dark blue suit, neutral grey background",
@@ -93,6 +114,21 @@ const AvatarBuilder: React.FC = () => {
     setIsLoading(true);
     setError(null);
 
+    if (isDemoMode) {
+      // Simulate API call for demo mode
+      setTimeout(() => {
+        const demoMatch = demoPairs.find(p => p.before === selectedImage);
+        if (demoMatch) {
+             setGeneratedImage(demoMatch.after);
+        } else {
+             // Fallback for user uploaded image in demo mode (just return same image to simulate "processed")
+             setGeneratedImage(selectedImage); 
+        }
+        setIsLoading(false);
+      }, 2000);
+      return;
+    }
+
     try {
       const result = await generateAvatar(selectedImage, prompt);
       setGeneratedImage(result);
@@ -145,9 +181,19 @@ const AvatarBuilder: React.FC = () => {
 
         {/* Upload Section */}
         <div className="mb-8">
-          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
-            1. Upload Portrait
-          </label>
+          <div className="flex justify-between items-center mb-3">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                1. Upload Portrait
+            </label>
+            {isDemoMode && !selectedImage && (
+                <button 
+                    onClick={loadDemoExample}
+                    className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-medium hover:bg-emerald-200 transition-colors flex items-center gap-1"
+                >
+                    <Sparkles size={12} /> Try Demo Example
+                </button>
+            )}
+          </div>
           <div 
             onClick={() => fileInputRef.current?.click()}
             className={`
@@ -247,11 +293,11 @@ const AvatarBuilder: React.FC = () => {
       </div>
 
       {/* Right Panel: Preview */}
-      <div className="flex-1 bg-slate-100 dark:bg-slate-950 p-6 lg:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]">
+      <div className="flex-1 bg-slate-100 dark:bg-slate-950 p-6 lg:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-y-auto custom-scrollbar">
+        <div className="flex-1 flex flex-col items-center justify-center min-h-min">
           {generatedImage ? (
-            <div className="flex flex-col items-center gap-6 w-full max-w-md">
-              <div className="relative group w-full aspect-square rounded-2xl overflow-hidden shadow-2xl ring-4 ring-white dark:ring-slate-800">
+            <div className="flex flex-col items-center gap-6 w-full max-w-md my-auto">
+              <div className="relative group w-full aspect-square rounded-2xl overflow-hidden shadow-2xl ring-4 ring-white dark:ring-slate-800 shrink-0">
                 <img 
                   src={generatedImage} 
                   alt="Generated Avatar" 
@@ -267,7 +313,7 @@ const AvatarBuilder: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col w-full gap-3">
+              <div className="flex flex-col w-full gap-3 shrink-0">
                 <button 
                     onClick={handleSaveToProfile}
                     disabled={isSaving}

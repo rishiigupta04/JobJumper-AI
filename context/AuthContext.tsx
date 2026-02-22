@@ -8,6 +8,8 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  isDemoMode: boolean;
+  enterDemoMode: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,6 +18,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -64,8 +67,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, []);
 
+  const enterDemoMode = () => {
+    setIsDemoMode(true);
+    // Create a mock user for demo mode
+    const demoUser: User = {
+      id: 'demo-user-id',
+      app_metadata: {},
+      user_metadata: {
+        full_name: 'Rishiraj Gupta',
+        avatar_url: ''
+      },
+      aud: 'authenticated',
+      created_at: new Date().toISOString(),
+      email: 'rishiraj.gupta@example.com',
+      phone: '',
+      role: 'authenticated',
+      updated_at: new Date().toISOString()
+    };
+    setUser(demoUser);
+    setLoading(false);
+  };
+
   const signOut = async () => {
     try {
+      if (isDemoMode) {
+        setIsDemoMode(false);
+        setUser(null);
+        setSession(null);
+        return;
+      }
       await supabase.auth.signOut();
     } catch (error) {
       console.error("Error signing out:", error);
@@ -76,7 +106,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signOut, isDemoMode, enterDemoMode }}>
       {!loading && children}
     </AuthContext.Provider>
   );

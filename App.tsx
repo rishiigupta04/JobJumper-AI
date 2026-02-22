@@ -144,7 +144,7 @@ const MainContent: React.FC = () => {
               </div>
               <div className="flex items-center gap-4">
                   <a href="https://www.linkedin.com/in/rishirajgupta04/" target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"><Linkedin size={18} /></a>
-                  <a href="https://github.com/rishiigupta04" target="_blank" rel="noopener noreferrer" className="hover:text-slate-900 dark:hover:text-white transition-colors"><Github size={18} /></a>
+                  <a href="https://github.com/rishirajgupta04" target="_blank" rel="noopener noreferrer" className="hover:text-slate-900 dark:hover:text-white transition-colors"><Github size={18} /></a>
               </div>
           </footer>
         )}

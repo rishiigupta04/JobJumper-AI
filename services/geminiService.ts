@@ -4,7 +4,7 @@ import { Resume, ChatMessage } from "../types";
 
 // Access process.env.API_KEY directly
 const getApiKey = () => {
-  return process.env.API_KEY || '';
+  return process.env.API_KEY || process.env.GEMINI_API_KEY || '';
 };
 
 // --- DATA SANITIZATION HELPERS (Prevents React Error #31) ---
@@ -94,7 +94,17 @@ export interface ResumeScore {
 
 export const scoreResume = async (resume: Resume, jobDescription: string): Promise<ResumeScore> => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key is missing.");
+  
+  if (!apiKey) {
+      return {
+          score: 75,
+          summary: "Your resume is a good match for this role, but could be improved by highlighting more specific technical achievements.",
+          strengths: ["Strong educational background", "Relevant project experience"],
+          gaps: ["Lack of cloud certification", "Limited leadership experience"],
+          recommendations: ["Add more metrics to your project descriptions", "Highlight your Python skills more prominently"]
+      };
+  }
+
   const ai = new GoogleGenAI({ apiKey });
 
   try {
@@ -146,7 +156,9 @@ export const generateCoverLetter = async (jobRole: string, company: string, user
 
 export const generateInterviewGuide = async (jobRole: string, company: string, description: string): Promise<string> => {
   const apiKey = getApiKey();
-  if (!apiKey) return "Error: API Key is missing.";
+  if (!apiKey) {
+      return `**Interview Guide for ${jobRole} at ${company}**\n\n**1. Role Overview**\nThis role focuses on ${jobRole} responsibilities. Key skills required: [Extracted from JD].\n\n**2. Key Technical Topics**\n- Topic A\n- Topic B\n\n**3. Behavioral Prep**\nPrepare stories for: "Tell me about a time you handled a difficult stakeholder."`;
+  }
   const ai = new GoogleGenAI({ apiKey });
   try {
     const prompt = `Create a strategic interview prep guide for ${jobRole} at ${company}.\nJD: "${truncateString(description, 2000)}"`;
@@ -159,7 +171,9 @@ export const generateInterviewGuide = async (jobRole: string, company: string, d
 
 export const generateNegotiationStrategy = async (jobRole: string, company: string, salary: string, description: string): Promise<string> => {
   const apiKey = getApiKey();
-  if (!apiKey) return "Error: API Key is missing.";
+  if (!apiKey) {
+      return `**Negotiation Strategy for ${jobRole} at ${company}**\n\n**1. Market Value Analysis**\nBased on your role and location, the market range is typically 10-20% higher than the initial offer of ${salary}. \n\n**2. Leverage Points**\n- Highlight your specific experience with the tech stack mentioned in the JD.\n- Mention any competing offers if you have them.\n\n**3. Script**\n"I'm very excited about the opportunity to join ${company}. However, based on my research and experience, I was expecting a base salary closer to [Target Amount]. Is there flexibility in the budget?"`;
+  }
   const ai = new GoogleGenAI({ apiKey });
   try {
     const prompt = `Create a salary negotiation strategy for ${jobRole} at ${company}. Offer: ${salary}.\nJD: "${truncateString(description, 1000)}"`;
@@ -359,9 +373,20 @@ export const parseResumeFromDocument = async (fileBase64: string): Promise<Parti
 
     const parsed = JSON.parse(response.text || "{}");
     
-    // Post-processing: Convert skills array to pipe-separated string
+    // Post-processing: Convert skills array or object to pipe-separated string
     if (Array.isArray(parsed.skills)) {
         parsed.skills = parsed.skills.join(' | ');
+    } else if (typeof parsed.skills === 'object' && parsed.skills !== null) {
+        // Flatten categorized skills
+        const allSkills: string[] = [];
+        Object.values(parsed.skills).forEach((val: any) => {
+            if (Array.isArray(val)) {
+                allSkills.push(...val);
+            } else if (typeof val === 'string') {
+                allSkills.push(val);
+            }
+        });
+        parsed.skills = allSkills.join(' | ');
     }
     
     const cleaned = traverseAndClean(parsed);
@@ -404,6 +429,48 @@ export interface AnalyzerResult {
 
 export const runAgentAnalyzer = async (jobDescription: string, resume: Resume): Promise<AnalyzerResult> => {
   const apiKey = getApiKey();
+  
+  if (!apiKey) {
+      console.warn("API Key missing, returning mock analyzer data.");
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return {
+          keyInfo: {
+              company: "Tech Corp (Demo)",
+              role: "Senior Engineer",
+              location: "Remote",
+              salary: "$150k - $200k",
+              experience: "5+ Years",
+              workMode: "Remote"
+          },
+          skills: {
+              technical: [
+                  { name: "React", status: "matched" },
+                  { name: "TypeScript", status: "matched" },
+                  { name: "Node.js", status: "matched" },
+                  { name: "Kubernetes", status: "missing" }
+              ],
+              soft: ["Communication", "Leadership"],
+              niceToHave: ["AWS", "Go"]
+          },
+          matchAnalysis: {
+              overallScore: 85,
+              technicalMatch: { score: 90, reason: "Strong match on frontend stack." },
+              experienceMatch: { score: 80, reason: "Years of experience align well." },
+              roleMatch: { score: 85, reason: "Previous roles are very similar." }
+          },
+          redFlags: [],
+          competitiveAnalysis: {
+              level: "Medium",
+              poolSize: "50-100 applicants",
+              differentiators: ["Full Stack experience", "Open Source contributions"]
+          },
+          recommendation: {
+              status: "Strong Apply",
+              reason: "Your profile is a great fit for this role."
+          }
+      };
+  }
+
   const ai = new GoogleGenAI({ apiKey });
   
   const schemaDescription = `
@@ -617,6 +684,65 @@ export const validateResearchResult = (data: any): ResearchResult => {
 
 export const runAgentResearch = async (company: string, role: string): Promise<ResearchResult> => {
   const apiKey = getApiKey();
+  
+  if (!apiKey) {
+      console.warn("API Key missing, returning mock research data.");
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return {
+          companyName: company,
+          roleTitle: role,
+          summary: {
+              opportunityScore: 8,
+              applyPriority: "High",
+              verdict: "Strong opportunity with good growth potential.",
+              nextSteps: ["Update Resume", "Connect with recruiters on LinkedIn"]
+          },
+          companyIntelligence: {
+              overview: `${company} is a major player in the tech industry.`,
+              sizeAndStage: "Public Company, 10,000+ employees",
+              competitors: ["Competitor A", "Competitor B"],
+              financialHealth: "Stable, stock up 10% YTD"
+          },
+          marketAnalysis: {
+              recentNews: ["Launched new AI product", "Quarterly earnings beat expectations"],
+              marketPosition: "Market Leader"
+          },
+          culture: {
+              workEnvironment: "Hybrid",
+              engineeringCulture: "Strong engineering culture, focus on innovation."
+          },
+          compensation: {
+              salaryRange: "$120k - $180k",
+              breakdown: { fresher: "$100k", mid: "$140k", senior: "$180k+" },
+              comparison: "Above Market",
+              benefits: ["Health Insurance", "Stock Options", "Remote Work"]
+          },
+          hiring: {
+              process: ["Recruiter Screen", "Technical Round", "System Design", "Managerial Round"],
+              applicationStrategy: "Referral is highly recommended."
+          },
+          risks: {
+              level: "Low",
+              concerns: ["None identified"]
+          },
+          strategy: {
+              outreach: "Reach out to hiring manager directly.",
+              differentiators: ["Highlight relevant project experience."]
+          },
+          reviews: {
+              glassdoor: { rating: "4.2", pros: "Great benefits, smart colleagues", cons: "Work-life balance can be tough" },
+              reddit: { sentiment: "Positive", keyDiscussions: ["Good place for juniors", "Competitive pay"] },
+              employeeVoices: [
+                  { source: "Glassdoor", quote: "Best place I've worked.", sentiment: "Positive" }
+              ]
+          },
+          sources: [
+              { title: "Company Careers", url: "https://example.com/careers" },
+              { title: "Glassdoor Reviews", url: "https://glassdoor.com" }
+          ]
+      };
+  }
+
   const ai = new GoogleGenAI({ apiKey });
   
   const schemaDescription = `
@@ -704,6 +830,38 @@ export interface InterviewPrepResult {
 
 export const runAgentInterviewPrep = async (company: string, role: string, jd: string): Promise<InterviewPrepResult> => {
   const apiKey = getApiKey();
+  
+  // Mock Data Fallback if API Key is missing (Demo Mode behavior)
+  if (!apiKey) {
+      console.warn("API Key missing, returning mock interview prep data.");
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate delay
+      return {
+          companyResearch: {
+              mission: `${company} is a leading technology company focused on innovation and customer-centric solutions.`,
+              products: ["Cloud Platform", "AI Services", "Consumer Apps"],
+              culture: "Fast-paced, engineering-driven, and collaborative.",
+              recentNews: [`${company} announces new AI initiative`, `${company} expands to new markets`]
+          },
+          technical: {
+              topics: ["System Design", "Algorithms", "Data Structures", "Scalability"],
+              questions: [
+                  { question: "How would you design a scalable URL shortener?", answer: "Focus on high availability, low latency, and unique key generation using base62 encoding." },
+                  { question: "Explain the difference between TCP and UDP.", answer: "TCP is connection-oriented and reliable; UDP is connectionless and faster but unreliable." }
+              ]
+          },
+          behavioral: {
+              competencies: ["Leadership", "Conflict Resolution", "Adaptability"],
+              questions: [
+                  { question: "Tell me about a time you failed.", starGuide: "Situation: Project deadline missed. Task: Deliver feature. Action: Communicated early, cut scope. Result: Delivered MVP on time." }
+              ]
+          },
+          questionsToAsk: [
+              "What is the biggest technical challenge the team is facing?",
+              "How does the team balance technical debt with new features?"
+          ]
+      };
+  }
+
   const ai = new GoogleGenAI({ apiKey });
   
   const schemaDescription = `
@@ -798,6 +956,11 @@ export const runAgentDocumentGen = async (params: {
   additionalContext?: string;
 }): Promise<string> => {
   const apiKey = getApiKey();
+  
+  if (!apiKey) {
+      return `[Subject: Application for ${params.type}]\n\nDear Hiring Manager,\n\nI am writing to express my strong interest in the open position at your company. With my background in ${params.resume.jobTitle} and experience with ${params.resume.skills}, I am confident in my ability to contribute effectively to your team.\n\n[This is a generated demo document. Please configure your API key for full functionality.]\n\nSincerely,\n${params.resume.fullName}`;
+  }
+
   const ai = new GoogleGenAI({ apiKey });
   
   const systemPrompt = `You are a world-class career strategist and expert copywriter. 

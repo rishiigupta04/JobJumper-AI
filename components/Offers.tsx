@@ -25,6 +25,7 @@ const Offers: React.FC = () => {
   
   // UI State
   const [activeTab, setActiveTab] = useState<'interview' | 'negotiation' | 'details'>('interview');
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // AI State - Loading only (Data is now in Job object)
   const [loading, setLoading] = useState<Record<string, boolean>>({});
@@ -91,6 +92,28 @@ const Offers: React.FC = () => {
     // Persist to Job Context
     updateJob(jobId, { negotiationStrategy: strategy });
     setLoading(prev => ({ ...prev, [`neg_${jobId}`]: false }));
+  };
+
+  const handleExportPDF = async () => {
+      if (!selectedJob) return;
+      const element = document.getElementById('offer-content-export');
+      if (element) {
+          const opt = {
+              margin: 1,
+              filename: `${selectedJob.company}_${activeTab}_Guide.pdf`,
+              image: { type: 'jpeg' as const, quality: 0.98 },
+              html2canvas: { scale: 2 },
+              jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const }
+          };
+          
+          try {
+              // @ts-ignore
+              const html2pdf = (await import('html2pdf.js')).default;
+              html2pdf().set(opt).from(element).save();
+          } catch (e) {
+              console.error("Failed to load html2pdf", e);
+          }
+      }
   };
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
@@ -265,7 +288,7 @@ const Offers: React.FC = () => {
         </div>
 
         {/* Right Column: Details - MAXIMIZED SPACE (Full width on mobile when selected) */}
-        <div className={`flex-1 bg-white dark:bg-slate-900 lg:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden fixed inset-0 z-50 lg:static lg:z-0 lg:flex ${selectedOfferId ? 'flex' : 'hidden lg:flex'}`}>
+        <div className={`flex-1 bg-white dark:bg-slate-900 lg:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden fixed inset-0 z-50 lg:static lg:z-0 lg:flex ${selectedOfferId ? 'flex' : 'hidden lg:flex'} ${isFullscreen ? 'fixed inset-0 z-[100] !rounded-none' : ''}`}>
            {selectedJob ? (
               <div className="flex-1 flex flex-col h-full overflow-hidden">
                  
@@ -322,15 +345,25 @@ const Offers: React.FC = () => {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center pl-2 border-l border-slate-200 dark:border-slate-800 ml-2">
-                        <button onClick={(e) => handleDelete(e, selectedJob.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="Delete Offer">
+                    <div className="flex items-center pl-2 border-l border-slate-200 dark:border-slate-800 ml-2 gap-1">
+                        {(activeTab === 'interview' || activeTab === 'negotiation') && (
+                            <>
+                                <button onClick={handleExportPDF} className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors" title="Export PDF">
+                                    <FileText size={18} />
+                                </button>
+                                <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors" title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}>
+                                    {isFullscreen ? <X size={18} /> : <ExternalLink size={18} />}
+                                </button>
+                            </>
+                        )}
+                        <button onClick={(e) => handleDelete(e, selectedJob.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors" title="Delete Offer">
                             <Trash2 size={18} />
                         </button>
                     </div>
                  </div>
 
                  {/* Content Area - Full Height */}
-                 <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-white dark:bg-slate-900 custom-scrollbar pb-24 lg:pb-0">
+                 <div id="offer-content-export" className="flex-1 overflow-y-auto p-4 md:p-8 bg-white dark:bg-slate-900 custom-scrollbar pb-24 lg:pb-0">
                     
                     {/* Interview Guide Tab */}
                     {activeTab === 'interview' && (

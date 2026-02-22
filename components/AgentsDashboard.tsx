@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useJobContext } from '../context/JobContext';
+import { useAuth } from '../context/AuthContext';
 import { ViewState, ResearchReport, InterviewPrepReport } from '../types';
 import { 
   Bot, Brain, Target, PenTool, Telescope, ArrowLeft, 
@@ -271,6 +272,7 @@ const AgentsDashboard: React.FC<AgentsDashboardProps> = ({ setView }) => {
 
 const AgentAnalyzer = () => {
   const { resume } = useJobContext();
+  const { isDemoMode } = useAuth();
   const [loading, setLoading] = useState(false);
   
   const [jd, setJd] = useState(() => {
@@ -290,6 +292,64 @@ const AgentAnalyzer = () => {
     return null;
   });
 
+  const DEMO_JD = `Senior Frontend Engineer
+  
+  We are looking for a Senior Frontend Engineer to join our team.
+  
+  Requirements:
+  - 5+ years of experience with React, TypeScript, and modern CSS.
+  - Experience with Next.js and Tailwind CSS.
+  - Strong understanding of web performance and accessibility.
+  - Experience with state management (Redux, Zustand, Context).
+  - Ability to mentor junior developers.
+  
+  Bonus:
+  - Experience with AI/LLM integration.
+  - Knowledge of WebGL or Three.js.`;
+
+  const DEMO_RESULT: AnalyzerResult = {
+    matchAnalysis: {
+        overallScore: 85,
+        technicalMatch: { score: 90, reason: "Strong match on React, TypeScript, and Tailwind." },
+        experienceMatch: { score: 80, reason: "Meets the 5+ years requirement." },
+        roleMatch: { score: 85, reason: "Good fit for Senior level responsibilities." }
+    },
+    skills: {
+        technical: [
+            { name: "React", status: "matched" },
+            { name: "TypeScript", status: "matched" },
+            { name: "Tailwind CSS", status: "matched" },
+            { name: "Next.js", status: "missing" },
+            { name: "WebGL", status: "missing" }
+        ],
+        soft: ["Mentorship", "Communication"],
+        niceToHave: ["AI Integration"]
+    },
+    keyInfo: {
+        role: "Senior Frontend Engineer",
+        company: "Tech Corp (Demo)",
+        location: "Remote",
+        salary: "$140k - $180k",
+        workMode: "Remote",
+        experience: "5+ Years"
+    },
+    competitiveAnalysis: {
+        level: "Medium",
+        poolSize: "50-100 Applicants",
+        differentiators: ["Strong React Portfolio", "Open Source Contributions"]
+    },
+    redFlags: [],
+    recommendation: {
+        status: "Strong Apply",
+        reason: "Your profile is a very strong match for this role."
+    }
+  };
+
+  const loadDemoData = () => {
+      setJd(DEMO_JD);
+      setResult(null); // Clear previous result to force re-analysis simulation
+  };
+
   useEffect(() => {
       localStorage.setItem('agent_analyzer_jd', jd);
   }, [jd]);
@@ -303,6 +363,15 @@ const AgentAnalyzer = () => {
   const handleAnalyze = async () => {
     if (!jd.trim()) return;
     setLoading(true);
+
+    if (isDemoMode && jd === DEMO_JD) {
+        setTimeout(() => {
+            setResult(DEMO_RESULT);
+            setLoading(false);
+        }, 1500);
+        return;
+    }
+
     try {
       const data = await runAgentAnalyzer(jd, resume);
       setResult(data);
@@ -340,6 +409,14 @@ const AgentAnalyzer = () => {
              <p className="text-slate-400 text-sm md:text-base">Deep match analysis against your current resume profile.</p>
           </div>
           <div className="flex items-center gap-3 self-end md:self-auto">
+              {isDemoMode && !result && (
+                  <button 
+                    onClick={loadDemoData}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs font-bold text-emerald-400 transition-colors"
+                  >
+                    <Sparkles size={14} /> Load Demo Data
+                  </button>
+              )}
               {result && (
                   <button 
                     onClick={handleClear}
@@ -839,6 +916,7 @@ const AgentPrep = () => {
 
 const AgentDocs = () => {
   const { resume } = useJobContext();
+  const { isDemoMode } = useAuth();
   const [docType, setDocType] = useState('Cover Letter');
   const [template, setTemplate] = useState('Direct & Impactful');
   const [tone, setTone] = useState('Professional');
@@ -857,10 +935,85 @@ const AgentDocs = () => {
   };
   const tones = ['Professional', 'Enthusiastic', 'Confident', 'Creative'];
 
+  const DEMO_JD = `Senior Product Manager
+  
+  We are looking for a Senior Product Manager to lead our mobile app team.
+  
+  Responsibilities:
+  - Define product strategy and roadmap.
+  - Work closely with engineering and design teams.
+  - Analyze user data to drive product decisions.
+  - Launch new features and improvements.
+  
+  Requirements:
+  - 5+ years of product management experience.
+  - Experience with mobile apps (iOS/Android).
+  - Strong analytical skills (SQL, Amplitude).
+  - Excellent communication and leadership skills.`;
+
+  const DEMO_OUTPUTS = {
+      'Cover Letter': `Dear Hiring Manager,
+
+I am writing to express my strong interest in the Senior Product Manager role at your company. With over 6 years of experience leading mobile product teams and a proven track record of launching successful features, I am confident in my ability to drive your mobile app strategy forward.
+
+In my current role, I led the redesign of our core mobile app, resulting in a 20% increase in user retention and a 15% boost in daily active users. I worked closely with engineering to implement a new analytics framework, enabling us to make data-driven decisions that reduced churn by 10%.
+
+I am particularly drawn to this opportunity because of your commitment to user-centric design and innovation. My experience aligns perfectly with your requirements for mobile expertise and analytical rigor.
+
+I would welcome the opportunity to discuss how my background and skills can contribute to your team's success. Thank you for considering my application.
+
+Sincerely,
+[Your Name]`,
+      'Resume Bullets': `• Spearheaded the launch of a new mobile feature that increased daily active users by 15% within the first quarter.
+• Defined and executed the product roadmap for the mobile team, aligning with company-wide strategic goals.
+• Analyzed user behavior using SQL and Amplitude to identify friction points, leading to a 10% reduction in churn.
+• Collaborated cross-functionally with engineering and design to deliver high-quality mobile experiences on time and within budget.`,
+      'LinkedIn Message': `Hi [Hiring Manager Name],
+
+I hope you're having a great week.
+
+I've been following [Company Name]'s work in the mobile space for a while, and I'm really impressed by your recent [Specific Feature/Launch].
+
+I'm a Senior Product Manager with 6 years of experience building mobile apps, and I recently saw the opening for the Senior PM role on your team. I believe my background in data-driven product development and mobile strategy would be a great fit.
+
+I'd love to connect and learn more about the team's vision for the upcoming year.
+
+Best regards,
+[Your Name]`,
+      'Follow-up Email': `Subject: Follow-up on Senior Product Manager Interview - [Your Name]
+
+Dear [Interviewer Name],
+
+Thank you so much for taking the time to speak with me yesterday about the Senior Product Manager role. I really enjoyed learning more about the team's focus on [Specific Topic Discussed] and the challenges you're tackling with the mobile app.
+
+Our conversation further reinforced my interest in the position. I am confident that my experience in [Key Skill 1] and [Key Skill 2] would allow me to hit the ground running and make an immediate impact.
+
+Please let me know if you have any additional questions or need any further information from me. I look forward to hearing from you soon.
+
+Best regards,
+[Your Name]`
+  };
+
+  const loadDemoData = () => {
+      setJd(DEMO_JD);
+      setOutput('');
+  };
+
   const handleGenerate = async () => {
     if (!jd.trim()) return;
     setLoading(true);
     setCopied(false);
+
+    if (isDemoMode && jd === DEMO_JD) {
+        setTimeout(() => {
+            // @ts-ignore
+            const demoOutput = DEMO_OUTPUTS[docType] || "Demo content not available for this type.";
+            setOutput(demoOutput);
+            setLoading(false);
+        }, 1500);
+        return;
+    }
+
     try {
       const text = await runAgentDocumentGen({
         type: docType,
@@ -895,6 +1048,14 @@ const AgentDocs = () => {
           <h2 className="text-2xl md:text-3xl font-bold text-white">Strategic Document Architect</h2>
         </div>
         <div className="flex items-center gap-4 bg-slate-900/50 p-2 rounded-xl border border-slate-800">
+           {isDemoMode && (
+               <button 
+                onClick={loadDemoData}
+                className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg text-[10px] font-bold transition-colors border border-emerald-500/30"
+               >
+                 <Sparkles size={12} /> DEMO
+               </button>
+           )}
            <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[10px] font-bold">
               <Check size={12} /> RESUME LOADED
            </div>
@@ -1402,7 +1563,7 @@ const AgentResearch: React.FC<{
                                         </div>
                                         <div className="space-y-1">
                                             {report.reviews.reddit.keyDiscussions.map((d, i) => (
-                                                <p key={i} className="text-xs text-slate-300 truncate">• {d}</p>
+                                                <p key={i} className="text-xs text-slate-300">• {d}</p>
                                             ))}
                                         </div>
                                     </div>

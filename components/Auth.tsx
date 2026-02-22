@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { Loader2, AlertCircle, ArrowRight, Sparkles, Mail, Lock, Zap, TrendingUp, MessageCircle, Github, Linkedin, Heart } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Loader2, AlertCircle, ArrowRight, Sparkles, Mail, Lock, Zap, TrendingUp, MessageCircle, Github, Linkedin, Heart, Play } from 'lucide-react';
 
 // Moved outside to prevent re-rendering on mouse move
 const FuturisticFooter = () => (
@@ -33,6 +34,7 @@ const FuturisticFooter = () => (
 );
 
 const Auth: React.FC = () => {
+  const { enterDemoMode } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -297,6 +299,20 @@ const Auth: React.FC = () => {
                     )}
                 </button>
                 </form>
+
+                <div className="mt-4 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-slate-800"></div>
+                    <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">or</span>
+                    <div className="h-px flex-1 bg-slate-800"></div>
+                </div>
+
+                <button
+                    onClick={enterDemoMode}
+                    className="w-full py-2.5 lg:py-3 bg-slate-800/50 hover:bg-slate-800 text-indigo-400 border border-indigo-500/30 hover:border-indigo-500/60 rounded-xl font-bold text-sm lg:text-base transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 mt-4 group"
+                >
+                    <Play size={16} className="fill-indigo-400/20 group-hover:fill-indigo-400 transition-colors" />
+                    <span>Try Demo Mode</span>
+                </button>
 
                 <div className="mt-5 lg:mt-6 text-center relative z-10">
                     <p className="text-slate-500 text-xs">
