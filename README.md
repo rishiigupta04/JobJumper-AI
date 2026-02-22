@@ -1,16 +1,24 @@
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 # JobJumper: Autonomous Career AI Agent 🚀
 
-![JobJumper Banner](https://picsum.photos/1200/400?blur=2)
+# Run and deploy your AI Studio app
+![JobJumper Banner](https://i.ibb.co/5hZ17R55/Screenshot-2026-02-22-154337.png)
 
+This contains everything you need to run your app locally.
 JobJumper is a cutting-edge, AI-powered career copilot designed to automate the most tedious aspects of the job search process. Built with a modern **React + TypeScript** frontend and a robust **Python + LangChain** backend, it leverages advanced Large Language Models (LLMs) to analyze job descriptions, generate tailored application materials, conduct deep company research, and prepare candidates for interviews.
 
+View your app in AI Studio: https://ai.studio/apps/75af926e-ae2a-48a4-8e72-1eceed059e96
 ## 🌟 Key Features
 
+## Run Locally
 ### 1. 🧠 Intelligent Job Analyzer
 - **Deep Match Analysis:** Uses LLMs to semantic-match your resume against job descriptions (JDs).
 - **Gap Identification:** Highlights missing skills and experience gaps.
 - **Actionable Feedback:** Provides a compatibility score and specific advice to improve your application.
 
+**Prerequisites:**  Node.js
 ### 2. 📝 Strategic Document Architect
 - **Automated Drafting:** Generates hyper-personalized cover letters, resume bullet points, and LinkedIn outreach messages.
 - **Tone & Style Control:** Choose from various professional tones (e.g., Confident, Enthusiastic, Data-Driven).
@@ -21,6 +29,11 @@ JobJumper is a cutting-edge, AI-powered career copilot designed to automate the 
 - **Technical Deep Dives:** Predicts technical questions based on the specific tech stack mentioned in the JD.
 - **Mock Interview Simulation:** (Planned) Interactive voice-based mock interviews.
 
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
 ### 4. 🕵️ Deep Research Agent
 - **Company Intelligence:** Scrapes and synthesizes data on company mission, culture, and recent news.
 - **Market Analysis:** Analyzes competitors and market positioning.
@@ -48,50 +61,6 @@ JobJumper is a cutting-edge, AI-powered career copilot designed to automate the 
 
 ---
 
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js v18+
-- Python 3.10+
-- API Keys for Gemini/OpenAI and Serper
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/jobjumper-ai.git
-   cd jobjumper-ai
-   ```
-
-2. **Frontend Setup**
-   ```bash
-   cd client
-   npm install
-   npm run dev
-   ```
-
-3. **Backend Setup**
-   ```bash
-   cd server
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   uvicorn main:app --reload
-   ```
-
-4. **Environment Variables**
-   Create a `.env` file in both `client` and `server` directories:
-   ```env
-   # Server .env
-   GOOGLE_API_KEY=your_gemini_key
-   OPENAI_API_KEY=your_openai_key
-   SERPER_API_KEY=your_serper_key
-
-   # Client .env
-   VITE_API_URL=http://localhost:8000
-   ```
-
----
 
 ## 📐 Architecture Overview
 
@@ -107,21 +76,7 @@ The application follows a **Retrieval-Augmented Generation (RAG)** pattern for p
 
 ---
 
-## 🤝 Contributing
 
-Contributions are welcome! Please fork the repository and submit a Pull Request.
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
