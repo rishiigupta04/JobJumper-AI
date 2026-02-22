@@ -7,7 +7,7 @@ JobJumper is a cutting-edge, AI-powered career copilot designed to automate the 
 
 ## 🌟 Key Features
 
-## Run Locally
+
 ### 1. 🧠 Intelligent Job Analyzer
 - **Deep Match Analysis:** Uses LLMs to semantic-match your resume against job descriptions (JDs).
 - **Gap Identification:** Highlights missing skills and experience gaps.
@@ -24,11 +24,6 @@ JobJumper is a cutting-edge, AI-powered career copilot designed to automate the 
 - **Technical Deep Dives:** Predicts technical questions based on the specific tech stack mentioned in the JD.
 - **Mock Interview Simulation:** (Planned) Interactive voice-based mock interviews.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
 ### 4. 🕵️ Deep Research Agent
 - **Company Intelligence:** Scrapes and synthesizes data on company mission, culture, and recent news.
 - **Market Analysis:** Analyzes competitors and market positioning.
@@ -72,7 +67,5 @@ The application follows a **Retrieval-Augmented Generation (RAG)** pattern for p
 ---
 
 
-
----
 
 **Built with ❤️ by [Rishi](https://github.com/rishirajgupta04)**
