@@ -112,6 +112,7 @@ const Offers: React.FC = () => {
               html2pdf().set(opt).from(element).save();
           } catch (e) {
               console.error("Failed to load html2pdf", e);
+              window.print();
           }
       }
   };

@@ -184,16 +184,51 @@ export const generateNegotiationStrategy = async (jobRole: string, company: stri
   }
 };
 
-export const enhanceResumeText = async (text: string, type: 'summary' | 'experience' | 'project'): Promise<string> => {
+export const enhanceResumeText = async (text: string, type: 'summary' | 'experience' | 'project', context?: any): Promise<string> => {
   const apiKey = getApiKey();
   if (!apiKey) return "";
   const ai = new GoogleGenAI({ apiKey });
-  if (!text) return "";
+  
   try {
-    const prompt = `Rewrite this resume ${type} to be more professional: "${truncateString(text, 1000)}"`;
+    let prompt = "";
+    if (!text && context) {
+        // Generation mode: Create new content based on resume context
+        // Filter context to avoid sending too much data if possible, but sending full resume is usually fine for summary generation
+        const cleanContext = JSON.stringify({
+            skills: context.skills,
+            experience: context.experience,
+            projects: context.projects,
+            education: context.education,
+            jobTitle: context.jobTitle || context.experience?.[0]?.role // Infer target role
+        });
+
+        prompt = `Act as a professional resume writer. Write a compelling, professional resume ${type} based on the candidate's profile below.
+        
+        Candidate Profile:
+        ${cleanContext}
+        
+        Requirements:
+        - For 'summary': Write a 3-4 sentence professional summary highlighting key years of experience, top skills, and major achievements. Do not use placeholders.
+        - For 'experience': Write a professional description of the role.
+        - For 'project': Write a professional description of the project.
+        - Use active voice and strong action verbs.
+        - Return ONLY the generated text, no conversational filler.`;
+    } else if (text) {
+        // Enhancement mode: Improve existing text
+        prompt = `Rewrite this resume ${type} to be more professional, concise, and impact-driven. Use active voice.
+        
+        Original Text:
+        "${truncateString(text, 1000)}"
+        
+        Return ONLY the rewritten text.`;
+    } else {
+        return "";
+    }
+
     const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
     return cleanAIResponse(response.text || text);
   } catch (error) {
+    console.error("Enhance Error:", error);
     return text;
   }
 };

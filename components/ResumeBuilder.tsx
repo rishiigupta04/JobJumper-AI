@@ -9,7 +9,7 @@ import {
 import { Experience, Education, Project, Resume } from '../types';
 
 // Declare html2pdf for TypeScript since we loaded it via CDN
-declare var html2pdf: any;
+// declare var html2pdf: any;
 
 const generateId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -97,7 +97,8 @@ const ResumeBuilder: React.FC = () => {
   const handleEnhance = async (text: string, type: 'summary' | 'experience' | 'project', id?: string) => {
     const loadingKey = id || type;
     setIsEnhancing(loadingKey);
-    const improved = await enhanceResumeText(text, type);
+    // Pass the full resume as context so the AI can generate content if text is empty
+    const improved = await enhanceResumeText(text, type, resume);
     
     if (type === 'summary') {
       updateResume({ ...resume, summary: improved });
@@ -169,7 +170,7 @@ const ResumeBuilder: React.FC = () => {
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     const element = document.getElementById('resume-preview');
     if (!element) return;
 
@@ -181,26 +182,24 @@ const ResumeBuilder: React.FC = () => {
     const opt = {
       margin: 0, // No margins, handled by CSS padding in element
       filename: filename,
-      image: { type: 'jpeg', quality: 0.98 },
+      image: { type: 'jpeg' as const, quality: 0.98 },
       html2canvas: { 
         scale: 2, // 2x scale for Retina-like crispness
         useCORS: true,
         letterRendering: true 
       },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
     };
 
-    // Use html2pdf.js via CDN window object
-    if (typeof html2pdf !== 'undefined') {
-        html2pdf().set(opt).from(element).save().then(() => {
-            setIsDownloading(false);
-        }).catch((err: any) => {
-            console.error("PDF generation failed:", err);
-            alert("Failed to generate PDF. Please try again.");
-            setIsDownloading(false);
-        });
-    } else {
-        alert("PDF generator not loaded. Please refresh the page.");
+    try {
+        // @ts-ignore
+        const html2pdf = (await import('html2pdf.js')).default;
+        await html2pdf().set(opt).from(element).save();
+    } catch (err: any) {
+        console.error("PDF generation failed:", err);
+        alert("PDF generation failed. Switching to print mode.");
+        window.print();
+    } finally {
         setIsDownloading(false);
     }
   };
@@ -478,11 +477,11 @@ const ResumeBuilder: React.FC = () => {
               <h3 className="text-lg font-bold text-slate-800 dark:text-white">Professional Summary</h3>
               <button 
                 onClick={() => handleEnhance(resume.summary, 'summary')}
-                disabled={isEnhancing === 'summary' || !resume.summary}
+                disabled={isEnhancing === 'summary'}
                 className="text-xs flex items-center gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
               >
                 {isEnhancing === 'summary' ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>}
-                Enhance with AI
+                {resume.summary ? 'Enhance with AI' : 'Generate with AI'}
               </button>
             </div>
             <textarea 

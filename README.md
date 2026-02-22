@@ -1,6 +1,6 @@
 # JobJumper: Autonomous Career AI Agent 🚀
 
-![JobJumper Banner](https://i.ibb.co/5hZ17R55/Screenshot-2026-02-22-154337.png)
+![JobJumper Banner](https://picsum.photos/1200/400?blur=2)
 
 JobJumper is a cutting-edge, AI-powered career copilot designed to automate the most tedious aspects of the job search process. Built with a modern **React + TypeScript** frontend and a robust **Python + LangChain** backend, it leverages advanced Large Language Models (LLMs) to analyze job descriptions, generate tailored application materials, conduct deep company research, and prepare candidates for interviews.
 
@@ -48,6 +48,50 @@ JobJumper is a cutting-edge, AI-powered career copilot designed to automate the 
 
 ---
 
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js v18+
+- Python 3.10+
+- API Keys for Gemini/OpenAI and Serper
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/jobjumper-ai.git
+   cd jobjumper-ai
+   ```
+
+2. **Frontend Setup**
+   ```bash
+   cd client
+   npm install
+   npm run dev
+   ```
+
+3. **Backend Setup**
+   ```bash
+   cd server
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   uvicorn main:app --reload
+   ```
+
+4. **Environment Variables**
+   Create a `.env` file in both `client` and `server` directories:
+   ```env
+   # Server .env
+   GOOGLE_API_KEY=your_gemini_key
+   OPENAI_API_KEY=your_openai_key
+   SERPER_API_KEY=your_serper_key
+
+   # Client .env
+   VITE_API_URL=http://localhost:8000
+   ```
+
+---
 
 ## 📐 Architecture Overview
 
@@ -63,5 +107,22 @@ The application follows a **Retrieval-Augmented Generation (RAG)** pattern for p
 
 ---
 
+## 🤝 Contributing
+
+Contributions are welcome! Please fork the repository and submit a Pull Request.
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+---
 
 **Built with ❤️ by [Rishi](https://github.com/rishirajgupta04)**
