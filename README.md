@@ -3,7 +3,7 @@
 
 
 
-JobJumper is a cutting-edge, AI-powered career copilot designed to automate the most tedious aspects of the job search process. Built with a modern **React + TypeScript** frontend and a robust **Python + LangChain** backend, it leverages advanced Large Language Models (LLMs) to analyze job descriptions, generate tailored application materials, conduct deep company research, and prepare candidates for interviews.
+JobJumper is a cutting-edge, AI-powered career copilot designed to automate the most tedious aspects of the job search process. Built with a modern **React + TypeScript** frontend and a robust **Python + LangChain** backend, it leverages advanced Large Language Models (LLMs) and RAG to analyze job descriptions, generate tailored job application materials, conduct deep company research, and prepare candidates for interviews.
 
 ## 🌟 Key Features
 
@@ -13,7 +13,7 @@ JobJumper is a cutting-edge, AI-powered career copilot designed to automate the 
 - **Gap Identification:** Highlights missing skills and experience gaps.
 - **Actionable Feedback:** Provides a compatibility score and specific advice to improve your application.
 
-**Prerequisites:**  Node.js
+
 ### 2. 📝 Strategic Document Architect
 - **Automated Drafting:** Generates hyper-personalized cover letters, resume bullet points, and LinkedIn outreach messages.
 - **Tone & Style Control:** Choose from various professional tones (e.g., Confident, Enthusiastic, Data-Driven).
@@ -45,7 +45,7 @@ JobJumper is a cutting-edge, AI-powered career copilot designed to automate the 
 - **Runtime:** [Python 3.10+](https://www.python.org/)
 - **Framework:** [FastAPI](https://fastapi.tiangolo.com/)
 - **Orchestration:** [LangChain](https://www.langchain.com/)
-- **LLM Integration:** Google Gemini Pro / OpenAI GPT-4
+- **LLM Integration:** Google Gemini 
 - **Vector Store:** [ChromaDB](https://www.trychroma.com/) (for RAG on resume/history)
 - **Tools:** Serper Dev (Google Search), BeautifulSoup (Web Scraping)
 
